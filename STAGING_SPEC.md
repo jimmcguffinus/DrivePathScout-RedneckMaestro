@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.4. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.4 OnlyRecoveredPath review and Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.5. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.5 OnlyRecoveredPathList review and Jim approval.
 
-**Version:** v0.1.4 (`-OnlyRecoveredPath` exact targeting; `-Execute` still not approved)
+**Version:** v0.1.5 (`-OnlyRecoveredPath` exact targeting; `-Execute` still not approved)
 
 **Date:** 2026-07-03
 
@@ -164,7 +164,7 @@ Created in **DryRun** and **Execute**. Contains every input row (including `Dupl
 
 ### Phase 5 — Execute (only with `-Execute` + Jim approval)
 
-**Not approved as of v0.1.4.** Code exists but must pass another Codex Sparky review and Jim approval before use.
+**Not approved as of v0.1.5.** Code exists but must pass another Codex Sparky review and Jim approval before use.
 
 1. Re-run full preflight checks.
 2. Move only rows with `DryRunReady` or `CollisionRenamed`.
@@ -415,6 +415,11 @@ Do **not** implement or use:
 4. **Large files (PST, etc.)** — keeper + source + dest hashing will be slow; pilot with `-Limit 1` essential.
 5. **Unicode / long paths** — use `-LiteralPath`; may need `\\?\` prefix on failure.
 6. **Approval layers** — separate approval for: (a) script implementation, (b) DryRun preflight review, (c) any `-Execute` run.
+
+**Resolved in v0.1.5:**
+
+- `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
+- Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
 **Resolved in v0.1.4:**
 

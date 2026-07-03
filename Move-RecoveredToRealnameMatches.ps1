@@ -18,10 +18,13 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$OnlyRecoveredPath,
 
+    [ValidateNotNullOrEmpty()]
+    [string]$OnlyRecoveredPathList,
+
     [switch]$Execute
 )
 
-# Drive Recovery Move Stager v0.1.4
+# Drive Recovery Move Stager v0.1.5
 # MOVE only when -Execute is passed. Default is DryRun preflight planning.
 # No Copy-Item. No Remove-Item. Never moves RealNamedPath keepers.
 
@@ -50,6 +53,33 @@ function Get-NormalizedPath {
     $root = [IO.Path]::GetPathRoot($full)
     if ($full.Equals($root, [StringComparison]::OrdinalIgnoreCase)) { return $root }
     return $full.TrimEnd([char[]]'\/')
+}
+
+function Read-ApprovedRecoveredPathList {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Approved recovered path list not found: $Path"
+    }
+    $paths = New-Object System.Collections.Generic.List[string]
+    $seen = @{}
+    foreach ($line in (Get-Content -LiteralPath $Path)) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
+        if ($trimmed.StartsWith('#')) { continue }
+        $normalized = Get-NormalizedPath $trimmed
+        if ([string]::IsNullOrWhiteSpace($normalized)) {
+            throw "Approved recovered path list contains a path that normalized to empty: $trimmed"
+        }
+        $key = $normalized.ToUpperInvariant()
+        if (-not $seen.ContainsKey($key)) {
+            $seen[$key] = $true
+            [void]$paths.Add($normalized)
+        }
+    }
+    if ($paths.Count -eq 0) {
+        throw "Approved recovered path list contains no usable paths: $Path"
+    }
+    return @($paths)
 }
 
 function Test-PathInsideRoot {
@@ -403,15 +433,34 @@ if ($PSBoundParameters.ContainsKey('Limit') -and $Limit -lt 1) {
     throw '-Limit must be at least 1 when specified.'
 }
 
+if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath') -and $PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+    throw '-OnlyRecoveredPath and -OnlyRecoveredPathList cannot be used together. Use one exact-path selector only.'
+}
+
+if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList') -and $PSBoundParameters.ContainsKey('Limit')) {
+    throw '-OnlyRecoveredPathList and -Limit cannot be used together. Use -OnlyRecoveredPathList for approved exact-path batch targeting, or -Limit for first-N primary items in CSV order.'
+}
+
 if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath') -and $PSBoundParameters.ContainsKey('Limit')) {
     throw '-OnlyRecoveredPath and -Limit cannot be used together. Use -OnlyRecoveredPath for exact single-path targeting, or -Limit for first-N primary items in CSV order.'
 }
 
-$onlyRecoveredPathNormalized = $null
+$onlyRecoveredPathSet = $null
+$onlyRecoveredPathListNormalized = @()
+$onlyRecoveredPathListFile = $null
 if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath')) {
-    $onlyRecoveredPathNormalized = Get-NormalizedPath $OnlyRecoveredPath
-    if ([string]::IsNullOrWhiteSpace($onlyRecoveredPathNormalized)) {
+    $singlePath = Get-NormalizedPath $OnlyRecoveredPath
+    if ([string]::IsNullOrWhiteSpace($singlePath)) {
         throw '-OnlyRecoveredPath resolved to an empty path.'
+    }
+    $onlyRecoveredPathSet = @{ $singlePath.ToUpperInvariant() = $singlePath }
+}
+elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+    $onlyRecoveredPathListFile = $OnlyRecoveredPathList
+    $onlyRecoveredPathListNormalized = @(Read-ApprovedRecoveredPathList -Path $OnlyRecoveredPathList)
+    $onlyRecoveredPathSet = @{}
+    foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
+        $onlyRecoveredPathSet[$approvedPath.ToUpperInvariant()] = $approvedPath
     }
 }
 
@@ -458,9 +507,9 @@ if ($missingColumns.Count -gt 0) {
     throw "Match CSV is missing required columns: $($missingColumns -join ', ')"
 }
 
-Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.4 mode=$runMode stamp=$stamp"
+Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.5 mode=$runMode stamp=$stamp"
 Write-LogLine -Path $logReport -Message "MatchCsvPath=$MatchCsvPath"
-Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath Execute=$Execute"
+Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath OnlyRecoveredPathList=$OnlyRecoveredPathList Execute=$Execute"
 
 $recoveredPathSet = @{}
 $realNamedPathSet = @{}
@@ -473,23 +522,26 @@ foreach ($key in $recoveredPathSet.Keys) {
     if ($realNamedPathSet.ContainsKey($key)) { $pathRoleConflicts[$key] = $true }
 }
 
-if ($null -ne $onlyRecoveredPathNormalized) {
-    $onlyPathMatches = @(
-        $inputRows | Where-Object {
-            $rp = Get-NormalizedPath $_.RecoveredPath
-            $rp.Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
+if ($null -ne $onlyRecoveredPathSet) {
+    $approvedPathsToValidate = if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) { $onlyRecoveredPathListNormalized } else { @($onlyRecoveredPathSet.Values) }
+    foreach ($approvedPath in $approvedPathsToValidate) {
+        $onlyPathMatches = @(
+            $inputRows | Where-Object {
+                $rp = Get-NormalizedPath $_.RecoveredPath
+                $rp.Equals($approvedPath, [StringComparison]::OrdinalIgnoreCase)
+            }
+        )
+        if ($onlyPathMatches.Count -eq 0) {
+            throw "Approved recovered path did not match any row in the match CSV: $approvedPath"
         }
-    )
-    if ($onlyPathMatches.Count -eq 0) {
-        throw "-OnlyRecoveredPath did not match any row in the match CSV: $OnlyRecoveredPath"
-    }
-    $onlyDistinctDedupeKeys = @{}
-    foreach ($matchRow in $onlyPathMatches) {
-        $matchKey = Get-DedupeKey -RecoveredPath (Get-NormalizedPath $matchRow.RecoveredPath) -Hash (Get-NormalizedHash $matchRow.Hash)
-        $onlyDistinctDedupeKeys[$matchKey] = $true
-    }
-    if ($onlyDistinctDedupeKeys.Count -gt 1) {
-        throw "-OnlyRecoveredPath matched multiple distinct RecoveredPath+Hash combinations ($($onlyDistinctDedupeKeys.Count)). Ambiguous targeting is not allowed."
+        $onlyDistinctDedupeKeys = @{}
+        foreach ($matchRow in $onlyPathMatches) {
+            $matchKey = Get-DedupeKey -RecoveredPath (Get-NormalizedPath $matchRow.RecoveredPath) -Hash (Get-NormalizedHash $matchRow.Hash)
+            $onlyDistinctDedupeKeys[$matchKey] = $true
+        }
+        if ($onlyDistinctDedupeKeys.Count -gt 1) {
+            throw "Approved recovered path matched multiple distinct RecoveredPath+Hash combinations ($($onlyDistinctDedupeKeys.Count)) for: $approvedPath"
+        }
     }
 }
 
@@ -525,8 +577,8 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
     $destinationVolume = Get-PathVolumeRoot $destinationRootNormalized
 
     $isOnlyRecoveredPathSelected = $true
-    if ($null -ne $onlyRecoveredPathNormalized) {
-        $isOnlyRecoveredPathSelected = $recoveredPath.Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
+    if ($null -ne $onlyRecoveredPathSet) {
+        $isOnlyRecoveredPathSelected = $onlyRecoveredPathSet.ContainsKey($recoveredPath.ToUpperInvariant())
     }
 
     if ($seenDedupeKeys.ContainsKey($dedupeKey)) {
@@ -534,11 +586,15 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
         $preflightMessage = 'Duplicate normalized RecoveredPath+Hash row; primary work item already planned.'
         $isPrimary = $false
     }
-    elseif ($null -ne $onlyRecoveredPathNormalized -and -not $isOnlyRecoveredPathSelected) {
+    elseif ($null -ne $onlyRecoveredPathSet -and -not $isOnlyRecoveredPathSelected) {
         $seenDedupeKeys[$dedupeKey] = $true
         $isPrimary = $false
         $preflightStatus = 'Skipped'
-        $preflightMessage = 'Not selected by -OnlyRecoveredPath.'
+        $preflightMessage = if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+            'Not selected by -OnlyRecoveredPathList.'
+        } else {
+            'Not selected by -OnlyRecoveredPath.'
+        }
     }
     else {
         $seenDedupeKeys[$dedupeKey] = $true
@@ -722,17 +778,38 @@ $preflightColumns = @(
 Export-ReportCsv -Rows ([object[]]$preflightRows) -Columns $preflightColumns -Path $preflightReport
 
 $selectedCandidate = $null
-if ($null -ne $onlyRecoveredPathNormalized) {
+$selectedCandidates = @()
+if ($null -ne $onlyRecoveredPathSet) {
     $selectedPrimaryRows = @(
         $preflightRows | Where-Object {
             $_.IsPrimaryWorkItem -eq 'True' -and
-            (Get-NormalizedPath $_.RecoveredPath).Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
+            $onlyRecoveredPathSet.ContainsKey((Get-NormalizedPath $_.RecoveredPath).ToUpperInvariant())
         }
     )
-    if ($selectedPrimaryRows.Count -ne 1) {
-        throw "-OnlyRecoveredPath expected exactly one primary selected row but found $($selectedPrimaryRows.Count)."
+    if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath')) {
+        if ($selectedPrimaryRows.Count -ne 1) {
+            throw "-OnlyRecoveredPath expected exactly one primary selected row but found $($selectedPrimaryRows.Count)."
+        }
+        $selectedCandidate = $selectedPrimaryRows[0]
+        $selectedCandidates = @($selectedCandidate)
     }
-    $selectedCandidate = $selectedPrimaryRows[0]
+    else {
+        $expectedSelectedCount = $onlyRecoveredPathListNormalized.Count
+        if ($selectedPrimaryRows.Count -ne $expectedSelectedCount) {
+            throw "-OnlyRecoveredPathList expected $expectedSelectedCount primary selected rows but found $($selectedPrimaryRows.Count)."
+        }
+        foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
+            $pathMatches = @(
+                $selectedPrimaryRows | Where-Object {
+                    (Get-NormalizedPath $_.RecoveredPath).Equals($approvedPath, [StringComparison]::OrdinalIgnoreCase)
+                }
+            )
+            if ($pathMatches.Count -ne 1) {
+                throw "-OnlyRecoveredPathList expected exactly one primary selected row for approved path but found $($pathMatches.Count): $approvedPath"
+            }
+        }
+        $selectedCandidates = $selectedPrimaryRows
+    }
 }
 
 $executionRows = New-Object System.Collections.Generic.List[object]
@@ -1016,6 +1093,50 @@ if ($null -ne $selectedCandidate) {
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_DestinationPath=$($selectedCandidate.PlannedDestinationPath)"
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_PreflightStatus=$($selectedCandidate.PreflightStatus)"
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_CollisionSuffix=$($selectedCandidate.CollisionSuffix)"
+}
+elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+    $missingRequestedPathCount = 0
+    $ambiguousRequestedPathCount = 0
+    foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
+        $pathPrimaryRows = @(
+            $preflightRows | Where-Object {
+                $_.IsPrimaryWorkItem -eq 'True' -and
+                (Get-NormalizedPath $_.RecoveredPath).Equals($approvedPath, [StringComparison]::OrdinalIgnoreCase)
+            }
+        )
+        if ($pathPrimaryRows.Count -eq 0) {
+            $missingRequestedPathCount++
+        }
+        elseif ($pathPrimaryRows.Count -gt 1) {
+            $ambiguousRequestedPathCount++
+        }
+    }
+    Write-Host ''
+    Write-Host '=== -OnlyRecoveredPathList Selection Summary ==='
+    Write-Host "PathListFile:                 $onlyRecoveredPathListFile"
+    Write-Host "RequestedPathCount:             $($onlyRecoveredPathListNormalized.Count)"
+    Write-Host "SelectedPrimaryCount:         $($selectedCandidates.Count)"
+    Write-Host "MissingRequestedPathCount:    $missingRequestedPathCount"
+    Write-Host "AmbiguousRequestedPathCount:  $ambiguousRequestedPathCount"
+    Write-LogLine -Path $logReport -Message 'ONLYRECOVEREDPATHLIST_SELECTED'
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_File=$onlyRecoveredPathListFile"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_RequestedPathCount=$($onlyRecoveredPathListNormalized.Count)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_SelectedPrimaryCount=$($selectedCandidates.Count)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_MissingRequestedPathCount=$missingRequestedPathCount"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_AmbiguousRequestedPathCount=$ambiguousRequestedPathCount"
+    Write-Host ''
+    Write-Host 'First selected candidates (up to 20):'
+    $previewRows = @($selectedCandidates | Select-Object -First 20)
+    foreach ($row in $previewRows) {
+        Write-Host "  RecoveredPath:     $($row.RecoveredPath)"
+        Write-Host "  RealNamedPath:     $($row.RealNamedPath)"
+        Write-Host "  Hash:              $($row.Hash)"
+        Write-Host "  SizeBytes:         $($row.SizeBytes)"
+        Write-Host "  DestinationPath:   $($row.PlannedDestinationPath)"
+        Write-Host "  PreflightStatus:   $($row.PreflightStatus)"
+        Write-Host "  CollisionSuffix:   $($row.CollisionSuffix)"
+        Write-Host ''
+    }
 }
 Write-LogLine -Path $logReport -Message 'COMPLETE'
 

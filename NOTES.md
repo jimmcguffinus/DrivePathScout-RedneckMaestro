@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.4 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
+- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.5 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
 
 **Meaning:**
 
@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-Limit` as needed. **Do not run `-Execute`.** Pending Codex Sparky Execute review and Jim approval after v0.1.4 OnlyRecoveredPath targeting.
+**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-Limit` as needed. **Do not run `-Execute`.** Pending Codex Sparky Execute review and Jim approval after v0.1.5 OnlyRecoveredPathList targeting.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 
@@ -366,7 +366,7 @@ Still read-only; no staging/copy/delete.
 
 #### 7. Maestro status
 
-**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.4 OnlyRecoveredPath targeting added. **`-Execute` remains blocked** pending re-review and Jim approval.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.5 OnlyRecoveredPathList targeting added. **`-Execute` remains blocked** pending re-review and Jim approval.
 
 **Completed:**
 
@@ -377,13 +377,13 @@ Still read-only; no staging/copy/delete.
 - Move-only staging design spec (`STAGING_SPEC.md`)
 - `Move-RecoveredToRealnameMatches.ps1` v0.1.0 DryRun preflight (tested)
 - `Move-RecoveredToRealnameMatches.ps1` v0.1.1 execute safety hardening
-- `Move-RecoveredToRealnameMatches.ps1` v0.1.4 OnlyRecoveredPath targeting
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.5 OnlyRecoveredPath targeting
 - Codex Sparky DryRun planning review passed
 
 **Not yet approved:**
 
 - `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
-- Codex Sparky Execute approval (pending re-review after v0.1.4)
+- Codex Sparky Execute approval (pending re-review after v0.1.5)
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete
