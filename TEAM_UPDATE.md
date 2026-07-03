@@ -410,3 +410,31 @@ Current status:
 - Any destructive operation: **not approved**
 
 Safe next action: review full-scan interesting-groups and recovered-match reports. Review `STAGING_SPEC.md` for move-only staging design. Plan move-based staging with hash-backed move manifests only; do not copy, move, delete, or modify anything on `I:\` without Jim's explicit approval.
+
+## 12. Move Stager v0.1.4 one-file pilot passed
+
+On 2026-07-03, Jim explicitly authorized one exact-target Execute operation for:
+
+```text
+I:\recover\PNG_Pics\11-8-2012 11-02-29 AM.png
+```
+
+Result:
+
+- Execution status: `MovedVerified`
+- Destination: `I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\0E7A20EC.11-8-2012 11-02-29 AM.png.phx.suns.png`
+- Size before and after: 260,238 bytes
+- SHA-256: `0E7A20EC6532A0FCEFC5BA8EFEBDF0BE6AA31DB07A88040613EA44ECCC928A6D`
+- Keeper remained present and hash-verified
+- Journal: one `BEFORE_MOVE` and one `AFTER_MOVE / MOVED_VERIFIED` entry
+- Manifest: exactly one row, status `MovedVerified`
+- Independent Codex post-move audit: passed
+
+Authorization status:
+
+- The one-file pilot authorization has been consumed
+- Any second file: **not authorized**
+- Batch or full Execute: **not authorized**
+- Copy, delete, rename cleanup, or destructive work: **not authorized**
+
+Safe next action: review the pilot evidence and decide deliberately whether to authorize another bounded operation. Do not infer broader approval from the successful pilot.

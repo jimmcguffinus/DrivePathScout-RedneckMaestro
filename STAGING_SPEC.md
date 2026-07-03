@@ -454,5 +454,8 @@ Do **not** implement or use:
 | v0.1.2 execute gate tightening (path-chain reparse, ReportRoot off I:\, manifest completeness, WhatIf journal) | Done |
 | v0.1.1 execute safety hardening (journal, fresh keeper hash, reparse, WhatIf) | Done |
 | Codex Sparky DryRun planning review | **Passed** |
-| Codex Sparky Execute review | **Not approved** — pending re-review after v0.1.4 fixes |
-| Jim approval for `-Execute` | **Blocked** |
+| Codex Sparky Execute code review | **Passed** for exact-target technical readiness |
+| One-file exact-target pilot | **Passed** — one Suns PNG moved and verified on 2026-07-03 |
+| Pilot authorization | **Consumed** — applied to that one source path only |
+| Any further `-Execute` | **Not authorized** — requires new explicit Jim approval |
+| Batch/full staging, copy, delete, or cleanup | **Not authorized** |

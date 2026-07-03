@@ -54,7 +54,7 @@ Note: because the repo itself is on `I:\`, scanning `I:\` will include `I:\Drive
 
 When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT Sparky for review.
 
-## Move staging planner (DryRun only)
+## Move staging planner
 
 `Move-RecoveredToRealnameMatches.ps1` v0.1.4 implements move-only staging **preflight** per `STAGING_SPEC.md`. Default mode is DryRun — it does not move, copy, delete, or rename files.
 
@@ -64,8 +64,8 @@ When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT S
   -Limit 10
 ```
 
-`-Execute` is not approved. v0.1.4 adds ``-OnlyRecoveredPath`` exact targeting and fixes path-chain volume root (`I:\` not `I:`) and typed execute statuses for source validation failures. DryRun planning passed Codex Sparky review; Execute remains blocked pending re-review and Jim approval. v0.1 approved recovered move sources: `I:\recover\` only.
+v0.1.4 adds ``-OnlyRecoveredPath`` exact targeting and fixes path-chain volume root (`I:\` not `I:`) and typed execute statuses for source validation failures. DryRun planning and the Execute code passed Codex Sparky review. Jim authorized one exact-target pilot on 2026-07-03; it moved and verified one Suns PNG successfully. That authorization is consumed. No second file, batch/full Execute, copy, delete, or cleanup operation is authorized. v0.1 approved recovered move sources remain limited to `I:\recover\`.
 
 ## Scope
 
-`Get-DriveUniquePaths.ps1` is an inventory tool, not an organizer. `Move-RecoveredToRealnameMatches.ps1` plans staged moves only in DryRun until `-Execute` is explicitly approved.
+`Get-DriveUniquePaths.ps1` is an inventory tool, not an organizer. `Move-RecoveredToRealnameMatches.ps1` defaults to DryRun and requires explicit, operation-specific Jim approval before each use of `-Execute`.

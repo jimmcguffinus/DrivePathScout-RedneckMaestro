@@ -393,6 +393,32 @@ Still read-only; no staging/copy/delete.
 
 ---
 
+## One-file Execute pilot — PASSED (2026-07-03)
+
+Jim authorized exactly one move for the verified Suns PNG candidate. The authorization was limited to:
+
+```text
+I:\recover\PNG_Pics\11-8-2012 11-02-29 AM.png
+```
+
+The v0.1.4 stager moved it to:
+
+```text
+I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\0E7A20EC.11-8-2012 11-02-29 AM.png.phx.suns.png
+```
+
+Independent post-move verification confirmed:
+
+- Source path absent after move
+- Destination present at 260,238 bytes
+- Destination SHA-256 matched `0E7A20EC6532A0FCEFC5BA8EFEBDF0BE6AA31DB07A88040613EA44ECCC928A6D`
+- Real-named keeper remained present with the same size and hash
+- Journal contained `BEFORE_MOVE` followed by `AFTER_MOVE / MOVED_VERIFIED`
+- Final execution manifest contained exactly one `MovedVerified` row
+- No copy, delete, cleanup, second-file, or batch operation occurred
+
+The one-file authorization is consumed. **No additional Execute operation is authorized.** Batch/full staging, copy, delete, and cleanup remain prohibited without new explicit Jim approval.
+
 ## Team culture — Curiosity with Guardrails
 
 During the Hash Scout v0.1.5 review, Codex Sparky showed useful read-only curiosity about the code after Cursor evolved the script from the original scout into balanced sampling and interesting duplicate filtering.
