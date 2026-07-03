@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.2. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.2 repair review and Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.3. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.3 path-root fix review and Jim approval.
 
-**Version:** v0.1.2 (execute gate tightening applied; `-Execute` still not approved)
+**Version:** v0.1.3 (path-chain volume root fix; `-Execute` still not approved)
 
 **Date:** 2026-07-03
 
@@ -164,7 +164,7 @@ Created in **DryRun** and **Execute**. Contains every input row (including `Dupl
 
 ### Phase 5 — Execute (only with `-Execute` + Jim approval)
 
-**Not approved as of v0.1.2.** Code exists but must pass another Codex Sparky review and Jim approval before use.
+**Not approved as of v0.1.3.** Code exists but must pass another Codex Sparky review and Jim approval before use.
 
 1. Re-run full preflight checks.
 2. Move only rows with `DryRunReady` or `CollisionRenamed`.
@@ -416,6 +416,12 @@ Do **not** implement or use:
 5. **Unicode / long paths** — use `-LiteralPath`; may need `\\?\` prefix on failure.
 6. **Approval layers** — separate approval for: (a) script implementation, (b) DryRun preflight review, (c) any `-Execute` run.
 
+**Resolved in v0.1.3:**
+
+- Preserve volume root as ``I:\`` (not bare ``I:``) in path-chain reparse inspection.
+- ``Test-PathChainRootComponents`` startup self-test.
+- Execute manifest typed ``SourceMissing`` / ``SourceHashMismatch`` statuses.
+
 **Resolved in v0.1.2:**
 
 - Full path-chain reparse inspection (fail closed).
@@ -438,8 +444,9 @@ Do **not** implement or use:
 |---|---|
 | Design documented (`STAGING_SPEC.md`) | Done |
 | `Move-RecoveredToRealnameMatches.ps1` v0.1.0 DryRun implementation | Done |
+| v0.1.3 path-chain volume root fix and typed execute source statuses | Done |
 | v0.1.2 execute gate tightening (path-chain reparse, ReportRoot off I:\, manifest completeness, WhatIf journal) | Done |
 | v0.1.1 execute safety hardening (journal, fresh keeper hash, reparse, WhatIf) | Done |
 | Codex Sparky DryRun planning review | **Passed** |
-| Codex Sparky Execute review | **Not approved** — pending re-review after v0.1.2 fixes |
+| Codex Sparky Execute review | **Not approved** — pending re-review after v0.1.3 fixes |
 | Jim approval for `-Execute` | **Blocked** |

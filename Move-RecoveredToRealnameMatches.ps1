@@ -18,7 +18,7 @@ param(
     [switch]$Execute
 )
 
-# Drive Recovery Move Stager v0.1.2
+# Drive Recovery Move Stager v0.1.3
 # MOVE only when -Execute is passed. Default is DryRun preflight planning.
 # No Copy-Item. No Remove-Item. Never moves RealNamedPath keepers.
 
@@ -233,14 +233,16 @@ function Get-PathChainComponents {
     if ([string]::IsNullOrWhiteSpace($normalized)) { return @() }
 
     $root = [IO.Path]::GetPathRoot($normalized)
-    $rootTrimmed = $root.TrimEnd([char[]]'\/')
+    if (-not $root.EndsWith([IO.Path]::DirectorySeparatorChar)) {
+        $root = $root + [IO.Path]::DirectorySeparatorChar
+    }
     $relative = $normalized.Substring($root.Length).TrimStart([char[]]'\/')
 
     $chain = New-Object System.Collections.Generic.List[string]
-    [void]$chain.Add($rootTrimmed)
+    [void]$chain.Add($root)
 
     if (-not [string]::IsNullOrWhiteSpace($relative)) {
-        $current = $rootTrimmed
+        $current = $root
         foreach ($part in ($relative -split '\\')) {
             if ([string]::IsNullOrWhiteSpace($part)) { continue }
             $current = Join-Path $current $part
@@ -249,6 +251,26 @@ function Get-PathChainComponents {
     }
 
     return @($chain)
+}
+
+function Test-PathChainRootComponents {
+    param(
+        [string]$SamplePath = 'I:\recover\PNG_Pics\example.png'
+    )
+    $chain = @(Get-PathChainComponents -Path $SamplePath)
+    if ($chain.Count -lt 2) {
+        throw "Path chain self-test failed: expected at least 2 components for $SamplePath"
+    }
+    if ($chain[0] -ne 'I:\') {
+        throw "Path chain self-test failed: first component must be 'I:\' but was '$($chain[0])'"
+    }
+    if ($chain[1] -ne 'I:\recover') {
+        throw "Path chain self-test failed: second component must be 'I:\recover' but was '$($chain[1])'"
+    }
+    if ($chain -contains 'I:') {
+        throw 'Path chain self-test failed: chain must not contain bare I:'
+    }
+    return $true
 }
 
 function Test-ReparsePathChain {
@@ -378,6 +400,8 @@ if ($PSBoundParameters.ContainsKey('Limit') -and $Limit -lt 1) {
     throw '-Limit must be at least 1 when specified.'
 }
 
+[void](Test-PathChainRootComponents)
+
 $started = Get-Date
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $runMode = if ($Execute) { 'Execute' } else { 'DryRun' }
@@ -419,7 +443,7 @@ if ($missingColumns.Count -gt 0) {
     throw "Match CSV is missing required columns: $($missingColumns -join ', ')"
 }
 
-Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.2 mode=$runMode stamp=$stamp"
+Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.3 mode=$runMode stamp=$stamp"
 Write-LogLine -Path $logReport -Message "MatchCsvPath=$MatchCsvPath"
 Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit Execute=$Execute"
 
@@ -674,6 +698,7 @@ if ($Execute) {
         $sizeAfter = 0
         $terminalStatuses = @(
             'VerifyFailed', 'KeeperMissing', 'KeeperHashMismatch', 'Skipped', 'WhatIfSkipped',
+            'SourceMissing', 'SourceHashMismatch',
             'SourceReparsePoint', 'DestinationReparsePoint', 'SourceReparseCheckFailed',
             'DestinationReparseCheckFailed', 'MovedVerified'
         )
@@ -719,7 +744,9 @@ if ($Execute) {
             }
             else {
                 if (-not (Test-Path -LiteralPath $item.RecoveredPath)) {
-                    throw 'Recovered source missing on execute re-check.'
+                    $executionStatus = 'SourceMissing'
+                    $errorMessage = 'Recovered source missing on execute re-check.'
+                    throw $errorMessage
                 }
 
                 $sourceReparse = Test-ReparsePathChain -Path $item.RecoveredPath -Mode Source
@@ -741,7 +768,11 @@ if ($Execute) {
                 }
 
                 $sourceHashBefore = Get-FileHashSafe -Path $item.RecoveredPath -AlgorithmName $Algorithm
-                if ($sourceHashBefore -ne $item.Hash) { throw 'Source hash mismatch on execute re-check.' }
+                if ($sourceHashBefore -ne $item.Hash) {
+                    $executionStatus = 'SourceHashMismatch'
+                    $errorMessage = 'Source hash mismatch on execute re-check.'
+                    throw $errorMessage
+                }
                 $sizeBefore = (Get-Item -LiteralPath $item.RecoveredPath -Force).Length
 
                 if ($PSCmdlet.ShouldProcess($item.RecoveredPath, "Move to $($item.PlannedDestinationPath)")) {
@@ -843,7 +874,7 @@ if ($Execute) {
                     TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
                 }
             }
-            elseif ($executionStatus -in @('SourceReparsePoint', 'DestinationReparsePoint', 'SourceReparseCheckFailed', 'DestinationReparseCheckFailed')) {
+            elseif ($executionStatus -in @('SourceReparsePoint', 'DestinationReparsePoint', 'SourceReparseCheckFailed', 'DestinationReparseCheckFailed', 'SourceMissing', 'SourceHashMismatch')) {
                 if ([string]::IsNullOrWhiteSpace($errorMessage)) { $errorMessage = $_.Exception.Message }
                 $failedCount++
                 $journalSequence++

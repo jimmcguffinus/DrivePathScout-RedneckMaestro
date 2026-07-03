@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.2 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
+- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.3 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
 
 **Meaning:**
 
@@ -323,11 +323,11 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-Limit` as needed. **Do not run `-Execute`.** Pending Codex Sparky Execute review and Jim approval after v0.1.2 gate tightening.
+**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-Limit` as needed. **Do not run `-Execute`.** Pending Codex Sparky Execute review and Jim approval after v0.1.3 path-root fix.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 
-**Script:** `Move-RecoveredToRealnameMatches.ps1` v0.1.0 → v0.1.2
+**Script:** `Move-RecoveredToRealnameMatches.ps1` v0.1.0 → v0.1.3
 
 **Codex Sparky safety verdict (commit `bfb1ebe`):**
 
@@ -341,12 +341,18 @@ Still read-only; no staging/copy/delete.
 - Reparse-point rejection (`SourceReparsePoint`) on source and destination paths
 - `-WhatIf` non-mutating destination folder creation (behind `ShouldProcess`)
 
-**v0.1.2 execute gate tightening (pending re-review):**
+**v0.1.2 execute gate tightening (applied):**
 
 - Full path-chain reparse inspection (fail closed)
 - `ReportRoot` must be outside `I:\`
 - All execute-attempt rows in final manifest (including keeper failures)
 - `BEFORE_MOVE` journal only after `ShouldProcess` approval; `WhatIfSkipped` when declined
+
+**v0.1.3 path-root fix (pending re-review):**
+
+- Preserve volume root as `I:\` (not bare `I:`) in `Get-PathChainComponents`
+- `Test-PathChainRootComponents` startup self-test
+- Execute manifest uses typed `SourceMissing` / `SourceHashMismatch` (not generic `MoveFailed`)
 
 **Not approved yet:**
 
@@ -360,7 +366,7 @@ Still read-only; no staging/copy/delete.
 
 #### 7. Maestro status
 
-**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.2 execute gate tightening applied. **`-Execute` remains blocked** pending re-review and Jim approval.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.3 path-root fix applied. **`-Execute` remains blocked** pending re-review and Jim approval.
 
 **Completed:**
 
@@ -371,13 +377,13 @@ Still read-only; no staging/copy/delete.
 - Move-only staging design spec (`STAGING_SPEC.md`)
 - `Move-RecoveredToRealnameMatches.ps1` v0.1.0 DryRun preflight (tested)
 - `Move-RecoveredToRealnameMatches.ps1` v0.1.1 execute safety hardening
-- `Move-RecoveredToRealnameMatches.ps1` v0.1.2 execute gate tightening
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.3 path-root safety fix
 - Codex Sparky DryRun planning review passed
 
 **Not yet approved:**
 
 - `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
-- Codex Sparky Execute approval (pending re-review after v0.1.2)
+- Codex Sparky Execute approval (pending re-review after v0.1.3)
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete
