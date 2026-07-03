@@ -721,6 +721,20 @@ $preflightColumns = @(
 )
 Export-ReportCsv -Rows ([object[]]$preflightRows) -Columns $preflightColumns -Path $preflightReport
 
+$selectedCandidate = $null
+if ($null -ne $onlyRecoveredPathNormalized) {
+    $selectedPrimaryRows = @(
+        $preflightRows | Where-Object {
+            $_.IsPrimaryWorkItem -eq 'True' -and
+            (Get-NormalizedPath $_.RecoveredPath).Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
+        }
+    )
+    if ($selectedPrimaryRows.Count -ne 1) {
+        throw "-OnlyRecoveredPath expected exactly one primary selected row but found $($selectedPrimaryRows.Count)."
+    }
+    $selectedCandidate = $selectedPrimaryRows[0]
+}
+
 $executionRows = New-Object System.Collections.Generic.List[object]
 $movedCount = 0
 $failedCount = 0
@@ -984,19 +998,7 @@ if ($Execute) {
 Write-LogLine -Path $logReport -Message "PreflightReport=$preflightReport"
 Write-LogLine -Path $logReport -Message "LogReport=$logReport"
 if ($Execute) { Write-LogLine -Path $logReport -Message "ExecutionReport=$executionReport" }
-Write-LogLine -Path $logReport -Message 'COMPLETE'
-
-if ($null -ne $onlyRecoveredPathNormalized) {
-    $selectedPrimaryRows = @(
-        $preflightRows | Where-Object {
-            $_.IsPrimaryWorkItem -eq 'True' -and
-            (Get-NormalizedPath $_.RecoveredPath).Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
-        }
-    )
-    if ($selectedPrimaryRows.Count -ne 1) {
-        throw "-OnlyRecoveredPath expected exactly one primary selected row but found $($selectedPrimaryRows.Count)."
-    }
-    $selectedCandidate = $selectedPrimaryRows[0]
+if ($null -ne $selectedCandidate) {
     Write-Host ''
     Write-Host '=== -OnlyRecoveredPath Selected Candidate ==='
     Write-Host "RecoveredPath:     $($selectedCandidate.RecoveredPath)"
@@ -1015,6 +1017,7 @@ if ($null -ne $onlyRecoveredPathNormalized) {
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_PreflightStatus=$($selectedCandidate.PreflightStatus)"
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_CollisionSuffix=$($selectedCandidate.CollisionSuffix)"
 }
+Write-LogLine -Path $logReport -Message 'COMPLETE'
 
 Write-Host ''
 Write-Host '=== Move-RecoveredToRealnameMatches Summary ==='
