@@ -1,6 +1,6 @@
 # Drive Recovery Team Update
 
-**Date:** 2026-07-02  
+**Date:** 2026-07-03  
 **Project:** DrivePathScout-RedneckMaestro  
 **Primary drive:** `I:\`
 
@@ -10,9 +10,9 @@ Safely inventory and deduplicate a recovered drive without modifying source file
 
 ## Core rule
 
-**READ ONLY until Jim explicitly approves a later staging/copy phase.**
+**READ ONLY until Jim explicitly approves a later move-based staging phase.**
 
-No move, copy, rename, delete, permission changes, timestamp changes, or source modification.
+No move, copy, rename, delete, permission changes, timestamp changes, or source modification until approved.
 
 ## 1. Path Scout completed
 
@@ -69,20 +69,23 @@ Possible later duplicate-staging format:
 hash.file602.Pepe_in_yard.png
 ```
 
-Example of a possible later staged evidence copy:
+Example of a possible later staged evidence file (move-based, not copy):
 
 ```text
 I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 ```
 
-Meaning:
+**Staging policy (Jim, 2026-07-03):**
 
-- `A94F3C21` — short hash proof
-- `file602` — recovered generic filename
-- `Pepe_in_yard` — matched real original filename
-- `.png` — file extension
+- Next phase: **move/stage planning only**
+- **No copy-based staging** — copying creates more mess and uses space
+- Future staging should **move** approved recovered duplicate files into staged folders
+- Do not delete files
+- Do not move real-named keeper files unless Jim explicitly approves
+- Use saved hashes and move manifests to prove original path, destination path, and content integrity
+- No destructive operation is approved
 
-This staging behavior is **not implemented or approved**.
+This staging behavior is **not implemented or approved for execution**.
 
 ## 3. Hash Scout built
 
@@ -104,6 +107,7 @@ Reports:
 
 - `file_hashes_*.csv`
 - `duplicate_hash_groups_*.csv`
+- `interesting_duplicate_groups_*.csv`
 - `recovered_to_realname_matches_*.csv`
 - `hash_scan_log_*.txt`
 
@@ -130,11 +134,13 @@ Reported tests passed:
 - No source modification
 - No full scan of `I:\`
 
-## 5. Current safe next commands
+## 5. Safe next commands
 
-Do **not** run the full hash scan yet.
+Full read-only hash scan is **complete** (see section 11).
 
-Run controlled tests first:
+Next phase: **move/stage planning only** — review reports; do not copy, move, delete, or modify anything on `I:\` without Jim's explicit approval.
+
+Controlled test commands (historical — for reference only):
 
 ```powershell
 cd I:\DrivePathScout-RedneckMaestro
@@ -143,8 +149,6 @@ cd I:\DrivePathScout-RedneckMaestro
 
 .\Get-DriveFileHashes.ps1 -MaxFiles 500
 ```
-
-Review all generated reports before considering a full run.
 
 ## 6. Cursor safety-review handoff
 
@@ -175,13 +179,21 @@ Cursor should report findings with file and line references. It must not modify 
 
 ## 7. Maestro status
 
-**Current phase:** Hash Scout safety review and 500-file test.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). **Next phase: move/stage planning only** — design move-based staging with hash-backed move manifests; no delete, no copy, no execution without Jim approval.
 
-Not yet approved:
+**Completed:**
 
-- Full `I:\` hash scan
-- Duplicate staging or copying
-- Rename, move, or delete cleanup
+- Path Scout full `I:\` inventory
+- Hash Scout v0.1.5 balanced sample validation
+- Hash Scout v0.1.5 full read-only `I:\` hash scan (155,184 candidates found and hashed; 40,693 duplicate groups; 19,835 interesting groups; 1,590 recovered-to-realname match rows)
+
+**Not yet approved:**
+
+- Move/stage **execution** (planning only for now)
+- Copy-based staging
+- Delete
+- Move real-named keeper files (unless Jim explicitly approves)
+- Rename/move/delete cleanup
 - Any destructive operation
 
 ## Team memory rule
@@ -311,3 +323,81 @@ Pattern + context + unfinished thread = go look and verify
 Curiosity is welcome. Unsupervised file-changing is not.
 
 Keep cleverness in analysis, reports, and triage. Keep safety-critical file operations boring, explicit, and subject to Jim's approval.
+
+## 11. Hash Scout v0.1.5 full read-only scan completed
+
+**Date:** 2026-07-03  
+**Report stamp:** `20260703-004335`
+
+Transcript:
+
+```text
+C:\Users\jim\Desktop\DrivePathInventory\overnight_full_hash_run_20260703-004334.txt
+```
+
+Command run:
+
+```powershell
+cd I:\DrivePathScout-RedneckMaestro
+.\Get-DriveFileHashes.ps1
+```
+
+Results:
+
+- Candidate files found: 155,184
+- Files hashed: 155,184
+- Duplicate hash groups found: 40,693
+- Interesting duplicate groups found: 19,835
+- Recovered-to-realname match rows: 1,590
+- Elapsed time: 03:20:03
+- **READ-ONLY RUN: no files were modified**
+
+Bucket counts (hashed files):
+
+- RecoveredGeneric: 151,460
+- OldUserProfile: 2,072
+- Documents: 997
+- Music: 327
+- Photos: 170
+- PSTMail: 63
+- Archives: 58
+- Videos: 37
+- Other: 0
+
+Reports location:
+
+```text
+C:\Users\jim\Desktop\DrivePathInventory\file_hashes_20260703-004335.csv
+C:\Users\jim\Desktop\DrivePathInventory\duplicate_hash_groups_20260703-004335.csv
+C:\Users\jim\Desktop\DrivePathInventory\interesting_duplicate_groups_20260703-004335.csv
+C:\Users\jim\Desktop\DrivePathInventory\recovered_to_realname_matches_20260703-004335.csv
+C:\Users\jim\Desktop\DrivePathInventory\hash_scan_log_20260703-004335.txt
+```
+
+Confirmed high-interest recovered-to-real match (same as balanced sample):
+
+```text
+Hash: 0E7A20EC6532A0FCEFC5BA8EFEBDF0BE6AA31DB07A88040613EA44ECCC928A6D
+RecoveredPath: I:\recover\PNG_Pics\11-8-2012 11-02-29 AM.png
+RealNamedPath: I:\1tbrecover\prevdrivestuff\Pictures\phx.suns.png
+SuggestedDuplicateName: 0E7A20EC.11-8-2012 11-02-29 AM.phx.suns.png
+```
+
+Verdict:
+
+- Full `I:\` read-only hash scan completed
+- Read-only safety confirmed — no source files were modified
+- Reports written only to Desktop `DrivePathInventory`
+
+Current status:
+
+- **Next phase: move/stage planning only**
+- **Move-based staging only** when approved — no copy-based staging
+- Move/stage **execution**: not approved
+- Copy: **not approved**
+- Delete: **not approved**
+- Move real-named keeper files: not approved unless Jim explicitly approves
+- Rename/move/delete cleanup: **not approved**
+- Any destructive operation: **not approved**
+
+Safe next action: review full-scan interesting-groups and recovered-match reports. Plan move-based staging with hash-backed move manifests only; do not copy, move, delete, or modify anything on `I:\` without Jim's explicit approval.

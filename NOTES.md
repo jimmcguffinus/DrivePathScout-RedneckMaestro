@@ -14,7 +14,7 @@
 
 ## DRIVE RECOVERY TEAM UPDATE
 
-**Date:** 2026-07-02  
+**Date:** 2026-07-03  
 **Project:** DrivePathScout-RedneckMaestro  
 **Primary drive:** `I:\`
 
@@ -24,9 +24,9 @@ We are safely inventorying and deduping a recovered drive without modifying sour
 
 ### Core rule
 
-**READ ONLY** until Jim explicitly approves a later staging/copy phase.
+**READ ONLY** until Jim explicitly approves a later **move-based** staging phase.
 
-No move, copy, rename, delete, permission changes, timestamp changes, or source modification.
+No move, copy, rename, delete, permission changes, timestamp changes, or source modification until approved.
 
 ---
 
@@ -85,11 +85,21 @@ If both have the same hash, they are duplicate content.
 hash.file602.Pepe_in_yard.png
 ```
 
-**Example staged duplicate/evidence copy:**
+**Example staged duplicate/evidence file (future move-based staging):**
 
 ```text
 I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 ```
+
+**Staging policy (Jim, 2026-07-03):**
+
+- **Next phase: move/stage planning only** — no execution without Jim approval
+- **No copy-based staging** — copying creates more mess and uses space
+- **Future staging: move** approved recovered duplicate files into staged folders
+- **Do not delete** files
+- **Do not move** real-named keeper files unless Jim explicitly approves
+- Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
+- No destructive operation is approved
 
 **Meaning:**
 
@@ -199,13 +209,71 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **v0.1.5 interesting tuning:** 16/33 interesting — triage working
 - **500-file normal test:** proved `-MaxFiles` alone is not representative
 
-**Do not run full `I:\` hash scan yet.** Await Jim's explicit approval.
+#### 5c. Hash Scout full read-only scan — COMPLETED (v0.1.5, 2026-07-03)
+
+**Command run:**
+
+```powershell
+.\Get-DriveFileHashes.ps1
+```
+
+**Report stamp:** `20260703-004335`
+
+**Transcript:** `C:\Users\jim\Desktop\DrivePathInventory\overnight_full_hash_run_20260703-004334.txt`
+
+**Reports location:** `C:\Users\jim\Desktop\DrivePathInventory`
+
+- `file_hashes_20260703-004335.csv`
+- `duplicate_hash_groups_20260703-004335.csv`
+- `interesting_duplicate_groups_20260703-004335.csv`
+- `recovered_to_realname_matches_20260703-004335.csv`
+- `hash_scan_log_20260703-004335.txt`
+
+**Results:**
+
+- Candidate files found: 155,184
+- Files hashed: 155,184
+- Duplicate hash groups: 40,693
+- Interesting duplicate groups: 19,835
+- Recovered-to-realname match rows: 1,590
+- Runtime: ~03:20:03 (00:43:35 → 04:03:38)
+- **READ-ONLY RUN: no source files were modified**
+
+**Bucket counts (hashed files):**
+
+| Bucket | Count |
+|---|---|
+| RecoveredGeneric | 151,460 |
+| OldUserProfile | 2,072 |
+| Documents | 997 |
+| Music | 327 |
+| Photos | 170 |
+| PSTMail | 63 |
+| Archives | 58 |
+| Videos | 37 |
+| Other | 0 |
+
+**Confirmed high-interest recovered-to-real match (same as balanced sample):**
+
+- Hash: `0E7A20EC6532A0FCEFC5BA8EFEBDF0BE6AA31DB07A88040613EA44ECCC928A6D`
+- RecoveredPath: `I:\recover\PNG_Pics\11-8-2012 11-02-29 AM.png`
+- RealNamedPath: `I:\1tbrecover\prevdrivestuff\Pictures\phx.suns.png`
+- SuggestedDuplicateName: `0E7A20EC.11-8-2012 11-02-29 AM.phx.suns.png`
+
+**Verdict:**
+
+- Full `I:\` read-only hash scan: **completed**
+- Read-only safety: **confirmed** — enumerate + `Get-FileHash` only; reports written to Desktop `ReportRoot`
+- No move, copy, rename, delete, or source modification occurred
 
 **Current approvals:**
 
-- v0.1.5 approved for read-only reporting tests
-- Full `I:\` hash scan: **not approved**
-- Duplicate staging/copy: **not approved**
+- v0.1.5 read-only reporting: **completed on full `I:\`**
+- Move/stage **planning**: next phase (Jim approval required before any action)
+- **Move-based staging only** when approved — no copy-based staging
+- Move/stage **execution**: **not approved**
+- Delete: **not approved**
+- Move real-named keeper files: **not approved** unless Jim explicitly approves
 - Rename/move/delete cleanup: **not approved**
 - Any destructive operation: **not approved**
 
@@ -221,7 +289,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 
 Still read-only; no staging/copy/delete.
 
-**Not approved:** full `I:\` hash scan, staging/copy, rename/move/delete cleanup.
+**Not approved:** staging/copy execution, rename/move/delete cleanup.
 
 #### 6. Cursor safety review (2026-07-02)
 
@@ -254,30 +322,34 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** Review `interesting_duplicate_groups_*.csv` and await Jim's decision on full `I:\` hash scan.
+**Safe next step:** Review full-scan reports (`interesting_duplicate_groups_20260703-004335.csv`, `recovered_to_realname_matches_20260703-004335.csv`). **Next phase: move/stage planning only** — plan move-based staging with hash-backed move manifests; no delete, no copy, no execution without Jim approval.
 
 **Not approved yet:**
 
-- Full `I:\` hash scan
-- Duplicate staging/copy
+- Move/stage **execution**
+- Copy-based staging
+- Delete
+- Move real-named keeper files (unless Jim explicitly approves)
 - Rename/move/delete cleanup
 - Any destructive operation
 
 #### 7. Maestro status
 
-**Current phase:** Hash Scout v0.1.5 balanced sample **passed**. v0.1.5 **approved for read-only reporting tests**. Standing by for Jim's decision on full `I:\` hash scan.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). **Next phase: move/stage planning only** — design move-based staging with hash-backed move manifests; no delete, no copy, no execution without Jim approval.
 
-**Passed:**
+**Completed:**
 
-- Read-only safety
-- Balanced sampling (`-BalancedSample -MaxFilesPerBucket 100`)
-- Recovered-to-realname matching (1 confirmed high-interest match)
-- Interesting duplicate triage (33 → 16 groups; junk filtered)
+- Path Scout full `I:\` inventory
+- Hash Scout v0.1.5 balanced sample validation
+- Hash Scout v0.1.5 full read-only `I:\` hash scan (155,184 candidates found and hashed; 40,693 duplicate groups; 19,835 interesting groups; 1,590 recovered-to-realname match rows)
+- Private GitHub repo initialized (`jimmcguffinus/DrivePathScout-RedneckMaestro`)
 
 **Not yet approved:**
 
-- Full `I:\` hash scan
-- Duplicate staging/copy
+- Move/stage **execution** (planning only for now)
+- Copy-based staging
+- Delete
+- Move real-named keeper files (unless Jim explicitly approves)
 - Rename/move/delete cleanup
 - Any destructive operation
 
