@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.0/v0.1.1 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
+- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.2 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
 
 **Meaning:**
 
@@ -323,23 +323,30 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-Limit` as needed. **Do not run `-Execute`.** Pending another Codex Sparky Execute review and Jim approval after v0.1.1 safety fixes.
+**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-Limit` as needed. **Do not run `-Execute`.** Pending Codex Sparky Execute review and Jim approval after v0.1.2 gate tightening.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 
-**Script:** `Move-RecoveredToRealnameMatches.ps1` v0.1.0 → v0.1.1
+**Script:** `Move-RecoveredToRealnameMatches.ps1` v0.1.0 → v0.1.2
 
-**Codex Sparky safety verdict:**
+**Codex Sparky safety verdict (commit `bfb1ebe`):**
 
 - **DryRun planning:** passed
 - **Execute:** not approved
 
-**Execute-blocking issues addressed in v0.1.1:**
+**v0.1.1 fixes applied:**
 
 - Crash-safe execution journal (`move_execution_journal_*.csv` on C:\ ReportRoot)
 - Fresh keeper hash recompute immediately before each move (no preflight cache gate on Execute)
 - Reparse-point rejection (`SourceReparsePoint`) on source and destination paths
 - `-WhatIf` non-mutating destination folder creation (behind `ShouldProcess`)
+
+**v0.1.2 execute gate tightening (pending re-review):**
+
+- Full path-chain reparse inspection (fail closed)
+- `ReportRoot` must be outside `I:\`
+- All execute-attempt rows in final manifest (including keeper failures)
+- `BEFORE_MOVE` journal only after `ShouldProcess` approval; `WhatIfSkipped` when declined
 
 **Not approved yet:**
 
@@ -353,7 +360,7 @@ Still read-only; no staging/copy/delete.
 
 #### 7. Maestro status
 
-**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.1 execute safety hardening applied. **`-Execute` remains blocked** pending re-review and Jim approval.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.2 execute gate tightening applied. **`-Execute` remains blocked** pending re-review and Jim approval.
 
 **Completed:**
 
@@ -362,14 +369,15 @@ Still read-only; no staging/copy/delete.
 - Hash Scout v0.1.5 full read-only `I:\` hash scan (155,184 candidates found and hashed; 40,693 duplicate groups; 19,835 interesting groups; 1,590 recovered-to-realname match rows)
 - Private GitHub repo initialized (`jimmcguffinus/DrivePathScout-RedneckMaestro`)
 - Move-only staging design spec (`STAGING_SPEC.md`)
-- `Move-RecoveredToRealnameMatches.ps1` v0.1.0 implemented (DryRun preflight; tested)
-- `Move-RecoveredToRealnameMatches.ps1` v0.1.1 execute safety hardening (journal, fresh keeper hash, reparse, WhatIf)
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.0 DryRun preflight (tested)
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.1 execute safety hardening
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.2 execute gate tightening
 - Codex Sparky DryRun planning review passed
 
 **Not yet approved:**
 
 - `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
-- Codex Sparky Execute approval (pending re-review after v0.1.1)
+- Codex Sparky Execute approval (pending re-review after v0.1.2)
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete

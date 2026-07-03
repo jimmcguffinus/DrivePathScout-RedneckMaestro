@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0/v0.1.1. **DryRun planning passed** initial Codex Sparky review. **Execute remains blocked** pending safety fixes and separate Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.2. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.2 repair review and Jim approval.
 
-**Version:** v0.1.1 (execute safety hardening applied; `-Execute` still not approved)
+**Version:** v0.1.2 (execute gate tightening applied; `-Execute` still not approved)
 
 **Date:** 2026-07-03
 
@@ -87,7 +87,7 @@ Status: `AlreadyStaged`
 
 1. Refuse to run if `-MatchCsvPath` is missing or file does not exist.
 2. No auto-latest report selection.
-3. Validate `-ReportRoot` defaults outside recover trees (`C:\Users\jim\Desktop\DrivePathInventory`).
+3. Validate `-ReportRoot` is normalized and **rejected if on `I:\`** (`C:\Users\jim\Desktop\DrivePathInventory`).
 4. Validate `-DestinationRoot` is on `I:\` (same volume as v0.1 approved sources).
 5. Load CSV; validate required columns: `Hash`, `RecoveredPath`, `RecoveredFileName`, `RealNamedPath`, `RealNamedFileName`, `SizeBytes`, `Extension` (+ `SuggestedDuplicateName` for audit).
 
@@ -119,12 +119,12 @@ For every row:
 | 5 | `RealNamedPath` exists | `KeeperMissing` |
 | 6 | `Get-FileHash(RealNamedPath)` == report `Hash` | `KeeperHashMismatch` |
 | 7 | `RecoveredPath` exists | `SourceMissing` |
-| 8 | `RecoveredPath` not a reparse point (symlink/junction) | `SourceReparsePoint` |
+| 8 | `RecoveredPath` full existing path chain has no reparse points | `SourceReparsePoint` / `SourceReparseCheckFailed` |
 | 9 | `Get-FileHash(RecoveredPath)` == report `Hash` | `SourceHashMismatch` |
 | 10 | Source size == `SizeBytes` | warn/skip as policy defines |
 | 11 | Compute destination name; sanitize + length check | shortened name logged if needed |
 | 12 | Destination does not exist | if exists → `.collision-NNN` suffix → `CollisionRenamed` |
-| 13 | Destination parent/root not a reparse point | `SourceReparsePoint` |
+| 13 | Destination existing parent/root path chain has no reparse points | `DestinationReparsePoint` / `DestinationReparseCheckFailed` |
 | 14 | Never overwrite existing destination | — |
 
 **Keeper verification is mandatory.** If keeper is missing or hash wrong, do not move the recovered file. A stale report must not cause relocation of a possibly sole verified copy.
@@ -164,17 +164,17 @@ Created in **DryRun** and **Execute**. Contains every input row (including `Dupl
 
 ### Phase 5 — Execute (only with `-Execute` + Jim approval)
 
-**Not approved as of v0.1.1.** Code exists but must pass another Codex Sparky review and Jim approval before use.
+**Not approved as of v0.1.2.** Code exists but must pass another Codex Sparky review and Jim approval before use.
 
 1. Re-run full preflight checks.
 2. Move only rows with `DryRunReady` or `CollisionRenamed`.
 3. **Fresh keeper hash:** recompute `Get-FileHash(RealNamedPath)` immediately before each move; do not rely on preflight keeper cache for the execute gate.
-4. **Reparse-point rejection:** reject source, destination parent, or `DestinationRoot` if any resolve as reparse points.
+4. **Reparse-point rejection:** walk the full existing path chain from volume root; fail closed on inspection errors.
 5. **Crash-safe journal:** append+flush per-item entries to `move_execution_journal_YYYYMMDD-HHMMSS.csv` under `ReportRoot` (on `C:\`) before and after each move.
 6. `Move-Item -LiteralPath` from `RecoveredPath` → `DestinationPath` only.
 7. Post-move: destination exists; `Get-FileHash(destination)` == report `Hash`.
 8. Success → `MOVED_VERIFIED`. Failure → `MOVE_FAILED` / `VERIFY_FAILED` (no delete, no rollback automation).
-9. **`-WhatIf`:** no filesystem mutation — destination folder creation is behind `ShouldProcess`; no `DestinationRoot` creation outside `ShouldProcess`.
+9. **`-WhatIf`:** no filesystem mutation — destination folder creation is behind `ShouldProcess`; `BEFORE_MOVE` journal only after `ShouldProcess` approves; manifest may show `WhatIfSkipped`.
 10. Write final summary:
 
 ```text
@@ -302,7 +302,10 @@ Counts by status.
 | `KeeperHashMismatch` | Keeper exists but hash ≠ report |
 | `SourceMissing` | `RecoveredPath` does not exist |
 | `SourceHashMismatch` | Source hash ≠ report |
-| `SourceReparsePoint` | Source or destination path resolves through symlink/junction |
+| `SourceReparsePoint` | Source path chain includes symlink/junction |
+| `SourceReparseCheckFailed` | Source reparse chain inspection failed (fail closed) |
+| `DestinationReparsePoint` | Destination parent/root path chain includes symlink/junction |
+| `DestinationReparseCheckFailed` | Destination reparse chain inspection failed (fail closed) |
 | `InvalidSourceRoot` | `RecoveredPath` outside v0.1 approved `I:\recover\` |
 | `AlreadyStaged` | Source under `I:\_RECOVERY_WORKBENCH\` |
 | `PathRoleConflict` | Recovered path equals a keeper path in input |
@@ -333,7 +336,7 @@ SOURCE (v0.1)
   ├─ I:\1tbrecover\ → NeedsJimReview / InvalidSourceRoot
   ├─ Not under I:\_RECOVERY_WORKBENCH\
   ├─ Exists
-  ├─ Not a reparse point (symlink/junction)
+  ├─ Not a reparse point on full existing path chain (fail closed on inspect errors)
   ├─ Hash == report Hash
   └─ Same volume as DestinationRoot (I:\)
 
@@ -341,7 +344,7 @@ DESTINATION
   ├─ Sanitized full filename format
   ├─ Path length safe (or deterministic shorten)
   ├─ No overwrite — .collision-NNN suffix
-  ├─ Parent/root not a reparse point
+  ├─ Existing parent/root chain not a reparse point (fail closed on inspect errors)
   └─ Create folder only on -Execute (behind ShouldProcess; not under -WhatIf)
 
 EXECUTE
@@ -413,6 +416,13 @@ Do **not** implement or use:
 5. **Unicode / long paths** — use `-LiteralPath`; may need `\\?\` prefix on failure.
 6. **Approval layers** — separate approval for: (a) script implementation, (b) DryRun preflight review, (c) any `-Execute` run.
 
+**Resolved in v0.1.2:**
+
+- Full path-chain reparse inspection (fail closed).
+- `ReportRoot` must be outside `I:\`.
+- All execute-attempt rows appear in final manifest (including keeper failures).
+- `BEFORE_MOVE` journal only after `ShouldProcess` approval.
+
 **Resolved in v0.1.1:**
 
 - Keeper hash caching during preflight only; execute re-checks fresh hash per move.
@@ -428,7 +438,8 @@ Do **not** implement or use:
 |---|---|
 | Design documented (`STAGING_SPEC.md`) | Done |
 | `Move-RecoveredToRealnameMatches.ps1` v0.1.0 DryRun implementation | Done |
+| v0.1.2 execute gate tightening (path-chain reparse, ReportRoot off I:\, manifest completeness, WhatIf journal) | Done |
 | v0.1.1 execute safety hardening (journal, fresh keeper hash, reparse, WhatIf) | Done |
 | Codex Sparky DryRun planning review | **Passed** |
-| Codex Sparky Execute review | **Not approved** — pending re-review after v0.1.1 fixes |
+| Codex Sparky Execute review | **Not approved** — pending re-review after v0.1.2 fixes |
 | Jim approval for `-Execute` | **Blocked** |

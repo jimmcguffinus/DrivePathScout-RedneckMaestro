@@ -18,7 +18,7 @@ param(
     [switch]$Execute
 )
 
-# Drive Recovery Move Stager v0.1.1
+# Drive Recovery Move Stager v0.1.2
 # MOVE only when -Execute is passed. Default is DryRun preflight planning.
 # No Copy-Item. No Remove-Item. Never moves RealNamedPath keepers.
 
@@ -227,28 +227,102 @@ function Write-LogLine {
     Write-Host $Message
 }
 
-function Test-PathHasReparsePoint {
+function Get-PathChainComponents {
     param([Parameter(Mandatory = $true)][string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return $false }
-    try {
-        $item = Get-Item -LiteralPath $Path -Force
-        return (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+    $normalized = Get-NormalizedPath $Path
+    if ([string]::IsNullOrWhiteSpace($normalized)) { return @() }
+
+    $root = [IO.Path]::GetPathRoot($normalized)
+    $rootTrimmed = $root.TrimEnd([char[]]'\/')
+    $relative = $normalized.Substring($root.Length).TrimStart([char[]]'\/')
+
+    $chain = New-Object System.Collections.Generic.List[string]
+    [void]$chain.Add($rootTrimmed)
+
+    if (-not [string]::IsNullOrWhiteSpace($relative)) {
+        $current = $rootTrimmed
+        foreach ($part in ($relative -split '\\')) {
+            if ([string]::IsNullOrWhiteSpace($part)) { continue }
+            $current = Join-Path $current $part
+            [void]$chain.Add($current)
+        }
     }
-    catch {
-        return $false
-    }
+
+    return @($chain)
 }
 
-function Test-DestinationPathSafe {
+function Test-ReparsePathChain {
     param(
-        [Parameter(Mandatory = $true)][string]$DestinationPath,
-        [Parameter(Mandatory = $true)][string]$DestinationRoot
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][ValidateSet('Source', 'Destination')][string]$Mode
     )
-    $parent = Split-Path -Parent $DestinationPath
-    if ([string]::IsNullOrWhiteSpace($parent)) { return $true }
-    if (Test-PathHasReparsePoint -Path $parent) { return $false }
-    if (Test-PathHasReparsePoint -Path $DestinationRoot) { return $false }
-    return $true
+    $checkFailedStatus = if ($Mode -eq 'Source') { 'SourceReparseCheckFailed' } else { 'DestinationReparseCheckFailed' }
+    $reparseStatus = if ($Mode -eq 'Source') { 'SourceReparsePoint' } else { 'DestinationReparsePoint' }
+
+    $normalized = Get-NormalizedPath $Path
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return [pscustomobject]@{
+            Safe          = $false
+            Status        = $checkFailedStatus
+            Message       = 'Path is empty; reparse chain check cannot complete.'
+            ComponentPath = ''
+        }
+    }
+
+    $chain = @(Get-PathChainComponents -Path $normalized)
+    if ($chain.Count -eq 0) {
+        return [pscustomobject]@{
+            Safe          = $false
+            Status        = $checkFailedStatus
+            Message       = 'Unable to build path chain for reparse inspection.'
+            ComponentPath = ''
+        }
+    }
+
+    if ($Mode -eq 'Destination' -and $chain.Count -gt 1) {
+        $chain = $chain[0..($chain.Count - 2)]
+    }
+
+    foreach ($component in $chain) {
+        if (-not (Test-Path -LiteralPath $component)) {
+            if ($Mode -eq 'Source') {
+                return [pscustomobject]@{
+                    Safe          = $false
+                    Status        = $checkFailedStatus
+                    Message       = "Source path component missing during reparse inspection: $component"
+                    ComponentPath = $component
+                }
+            }
+            continue
+        }
+
+        try {
+            $item = Get-Item -LiteralPath $component -Force -ErrorAction Stop
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                return [pscustomobject]@{
+                    Safe          = $false
+                    Status        = $reparseStatus
+                    Message       = "Reparse point detected at $component"
+                    ComponentPath = $component
+                }
+            }
+        }
+        catch {
+            return [pscustomobject]@{
+                Safe          = $false
+                Status        = $checkFailedStatus
+                Message       = "Reparse inspection failed at ${component}: $($_.Exception.Message)"
+                ComponentPath = $component
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Safe          = $true
+        Status        = $null
+        Message       = $null
+        ComponentPath = $null
+    }
 }
 
 function Write-ExecutionJournalEntry {
@@ -320,6 +394,10 @@ if (-not (Test-SameVolume -PathA $destinationRootNormalized -PathB 'I:\')) {
     throw "DestinationRoot must be on I:\ for same-volume moves: $DestinationRoot"
 }
 
+if (Test-SameVolume -PathA $reportRootNormalized -PathB 'I:\') {
+    throw "ReportRoot must be outside I:\. Reports, journals, and logs must not be written to the recovery drive. ReportRoot=$ReportRoot"
+}
+
 if (-not (Test-Path -LiteralPath $reportRootNormalized)) {
     New-Item -ItemType Directory -Path $reportRootNormalized -Force | Out-Null
 }
@@ -341,7 +419,7 @@ if ($missingColumns.Count -gt 0) {
     throw "Match CSV is missing required columns: $($missingColumns -join ', ')"
 }
 
-Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.1 mode=$runMode stamp=$stamp"
+Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.2 mode=$runMode stamp=$stamp"
 Write-LogLine -Path $logReport -Message "MatchCsvPath=$MatchCsvPath"
 Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit Execute=$Execute"
 
@@ -458,15 +536,19 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
                 }
 
                 if ($preflightStatus -eq 'DryRunReady') {
+                    $sourceReparse = Test-ReparsePathChain -Path $recoveredPath -Mode Source
+                    if (-not $sourceReparse.Safe) {
+                        $preflightStatus = $sourceReparse.Status
+                        $preflightMessage = $sourceReparse.Message
+                    }
+                }
+
+                if ($preflightStatus -eq 'DryRunReady') {
                     try {
                         $sourceInfo = Get-Item -LiteralPath $recoveredPath -Force
                         if ($sourceInfo.PSIsContainer) {
                             $preflightStatus = 'Skipped'
                             $preflightMessage = 'RecoveredPath is a directory, not a file.'
-                        }
-                        elseif (($sourceInfo.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                            $preflightStatus = 'SourceReparsePoint'
-                            $preflightMessage = 'RecoveredPath is a reparse point (symlink/junction).'
                         }
                         else {
                             $expectedSize = [long]$row.SizeBytes
@@ -514,9 +596,10 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
                         }
                     }
                     if ($preflightStatus -in @('DryRunReady', 'CollisionRenamed')) {
-                        if (-not (Test-DestinationPathSafe -DestinationPath $plannedDestinationPath -DestinationRoot $destinationRootNormalized)) {
-                            $preflightStatus = 'SourceReparsePoint'
-                            $preflightMessage = 'Destination parent or root resolves through a reparse point.'
+                        $destReparse = Test-ReparsePathChain -Path $plannedDestinationPath -Mode Destination
+                        if (-not $destReparse.Safe) {
+                            $preflightStatus = $destReparse.Status
+                            $preflightMessage = $destReparse.Message
                         }
                     }
                 }
@@ -589,6 +672,11 @@ if ($Execute) {
         $keeperHashBefore = ''
         $sizeBefore = 0
         $sizeAfter = 0
+        $terminalStatuses = @(
+            'VerifyFailed', 'KeeperMissing', 'KeeperHashMismatch', 'Skipped', 'WhatIfSkipped',
+            'SourceReparsePoint', 'DestinationReparsePoint', 'SourceReparseCheckFailed',
+            'DestinationReparseCheckFailed', 'MovedVerified'
+        )
 
         try {
             if (-not (Test-Path -LiteralPath $item.RealNamedPath)) {
@@ -609,11 +697,8 @@ if ($Execute) {
                     ErrorMessage     = $errorMessage
                     TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
                 }
-                continue
             }
-
-            $keeperHashBefore = Get-FileHashSafe -Path $item.RealNamedPath -AlgorithmName $Algorithm
-            if ($keeperHashBefore -ne $item.Hash) {
+            elseif (($keeperHashBefore = Get-FileHashSafe -Path $item.RealNamedPath -AlgorithmName $Algorithm) -ne $item.Hash) {
                 $executionStatus = 'KeeperHashMismatch'
                 $errorMessage = 'Keeper hash does not match report hash on execute re-check.'
                 $journalSequence++
@@ -631,120 +716,114 @@ if ($Execute) {
                     ErrorMessage     = $errorMessage
                     TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
                 }
-                continue
             }
-
-            if (-not (Test-Path -LiteralPath $item.RecoveredPath)) {
-                throw 'Recovered source missing on execute re-check.'
-            }
-            if (Test-PathHasReparsePoint -Path $item.RecoveredPath) {
-                throw 'Recovered source is a reparse point on execute re-check.'
-            }
-            if (Test-Path -LiteralPath $item.PlannedDestinationPath) {
-                throw 'Destination already exists on execute re-check.'
-            }
-            if (-not (Test-DestinationPathSafe -DestinationPath $item.PlannedDestinationPath -DestinationRoot $destinationRootNormalized)) {
-                throw 'Destination path resolves through a reparse point on execute re-check.'
-            }
-
-            $sourceHashBefore = Get-FileHashSafe -Path $item.RecoveredPath -AlgorithmName $Algorithm
-            if ($sourceHashBefore -ne $item.Hash) { throw 'Source hash mismatch on execute re-check.' }
-            $sizeBefore = (Get-Item -LiteralPath $item.RecoveredPath -Force).Length
-
-            $journalSequence++
-            Write-ExecutionJournalEntry -Path $executionJournal -Entry @{
-                RunStamp         = $stamp
-                Sequence         = $journalSequence
-                Phase            = 'BEFORE_MOVE'
-                Hash             = $item.Hash
-                RecoveredPath    = $item.RecoveredPath
-                DestinationPath  = $item.PlannedDestinationPath
-                RealNamedPath    = $item.RealNamedPath
-                SourceHashBefore = $sourceHashBefore
-                DestHashAfter    = ''
-                Status           = 'BEFORE_MOVE'
-                ErrorMessage     = ''
-                TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
-            }
-
-            if ($PSCmdlet.ShouldProcess($item.RecoveredPath, "Move to $($item.PlannedDestinationPath)")) {
-                $destParent = Split-Path -Parent $item.PlannedDestinationPath
-                if (-not (Test-Path -LiteralPath $destinationRootNormalized)) {
-                    New-Item -ItemType Directory -Path $destinationRootNormalized -Force | Out-Null
-                }
-                if (-not [string]::IsNullOrWhiteSpace($destParent) -and -not (Test-Path -LiteralPath $destParent)) {
-                    New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+            else {
+                if (-not (Test-Path -LiteralPath $item.RecoveredPath)) {
+                    throw 'Recovered source missing on execute re-check.'
                 }
 
-                Move-Item -LiteralPath $item.RecoveredPath -Destination $item.PlannedDestinationPath
+                $sourceReparse = Test-ReparsePathChain -Path $item.RecoveredPath -Mode Source
+                if (-not $sourceReparse.Safe) {
+                    $executionStatus = $sourceReparse.Status
+                    $errorMessage = $sourceReparse.Message
+                    throw $sourceReparse.Message
+                }
 
-                if (-not (Test-Path -LiteralPath $item.PlannedDestinationPath)) { throw 'Destination missing after move.' }
-                if (Test-Path -LiteralPath $item.RecoveredPath) { throw 'Source still exists after move.' }
+                if (Test-Path -LiteralPath $item.PlannedDestinationPath) {
+                    throw 'Destination already exists on execute re-check.'
+                }
 
-                $destHashAfter = Get-FileHashSafe -Path $item.PlannedDestinationPath -AlgorithmName $Algorithm
-                $sizeAfter = (Get-Item -LiteralPath $item.PlannedDestinationPath -Force).Length
-                if ($destHashAfter -ne $item.Hash) {
-                    $executionStatus = 'VerifyFailed'
-                    $errorMessage = 'Destination hash mismatch after move.'
-                    $failedCount++
+                $destReparse = Test-ReparsePathChain -Path $item.PlannedDestinationPath -Mode Destination
+                if (-not $destReparse.Safe) {
+                    $executionStatus = $destReparse.Status
+                    $errorMessage = $destReparse.Message
+                    throw $destReparse.Message
+                }
+
+                $sourceHashBefore = Get-FileHashSafe -Path $item.RecoveredPath -AlgorithmName $Algorithm
+                if ($sourceHashBefore -ne $item.Hash) { throw 'Source hash mismatch on execute re-check.' }
+                $sizeBefore = (Get-Item -LiteralPath $item.RecoveredPath -Force).Length
+
+                if ($PSCmdlet.ShouldProcess($item.RecoveredPath, "Move to $($item.PlannedDestinationPath)")) {
                     $journalSequence++
                     Write-ExecutionJournalEntry -Path $executionJournal -Entry @{
                         RunStamp         = $stamp
                         Sequence         = $journalSequence
-                        Phase            = 'VERIFY_FAILED'
+                        Phase            = 'BEFORE_MOVE'
                         Hash             = $item.Hash
                         RecoveredPath    = $item.RecoveredPath
                         DestinationPath  = $item.PlannedDestinationPath
                         RealNamedPath    = $item.RealNamedPath
                         SourceHashBefore = $sourceHashBefore
-                        DestHashAfter    = $destHashAfter
-                        Status           = 'VERIFY_FAILED'
-                        ErrorMessage     = $errorMessage
-                        TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
-                    }
-                }
-                else {
-                    $executionStatus = 'MovedVerified'
-                    $movedCount++
-                    $journalSequence++
-                    Write-ExecutionJournalEntry -Path $executionJournal -Entry @{
-                        RunStamp         = $stamp
-                        Sequence         = $journalSequence
-                        Phase            = 'AFTER_MOVE'
-                        Hash             = $item.Hash
-                        RecoveredPath    = $item.RecoveredPath
-                        DestinationPath  = $item.PlannedDestinationPath
-                        RealNamedPath    = $item.RealNamedPath
-                        SourceHashBefore = $sourceHashBefore
-                        DestHashAfter    = $destHashAfter
-                        Status           = 'MOVED_VERIFIED'
+                        DestHashAfter    = ''
+                        Status           = 'BEFORE_MOVE'
                         ErrorMessage     = ''
                         TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
                     }
+
+                    $destParent = Split-Path -Parent $item.PlannedDestinationPath
+                    if (-not (Test-Path -LiteralPath $destinationRootNormalized)) {
+                        New-Item -ItemType Directory -Path $destinationRootNormalized -Force | Out-Null
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($destParent) -and -not (Test-Path -LiteralPath $destParent)) {
+                        New-Item -ItemType Directory -Path $destParent -Force | Out-Null
+                    }
+
+                    Move-Item -LiteralPath $item.RecoveredPath -Destination $item.PlannedDestinationPath
+
+                    if (-not (Test-Path -LiteralPath $item.PlannedDestinationPath)) { throw 'Destination missing after move.' }
+                    if (Test-Path -LiteralPath $item.RecoveredPath) { throw 'Source still exists after move.' }
+
+                    $destHashAfter = Get-FileHashSafe -Path $item.PlannedDestinationPath -AlgorithmName $Algorithm
+                    $sizeAfter = (Get-Item -LiteralPath $item.PlannedDestinationPath -Force).Length
+                    if ($destHashAfter -ne $item.Hash) {
+                        $executionStatus = 'VerifyFailed'
+                        $errorMessage = 'Destination hash mismatch after move.'
+                        $failedCount++
+                        $journalSequence++
+                        Write-ExecutionJournalEntry -Path $executionJournal -Entry @{
+                            RunStamp         = $stamp
+                            Sequence         = $journalSequence
+                            Phase            = 'VERIFY_FAILED'
+                            Hash             = $item.Hash
+                            RecoveredPath    = $item.RecoveredPath
+                            DestinationPath  = $item.PlannedDestinationPath
+                            RealNamedPath    = $item.RealNamedPath
+                            SourceHashBefore = $sourceHashBefore
+                            DestHashAfter    = $destHashAfter
+                            Status           = 'VERIFY_FAILED'
+                            ErrorMessage     = $errorMessage
+                            TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
+                        }
+                    }
+                    else {
+                        $executionStatus = 'MovedVerified'
+                        $movedCount++
+                        $journalSequence++
+                        Write-ExecutionJournalEntry -Path $executionJournal -Entry @{
+                            RunStamp         = $stamp
+                            Sequence         = $journalSequence
+                            Phase            = 'AFTER_MOVE'
+                            Hash             = $item.Hash
+                            RecoveredPath    = $item.RecoveredPath
+                            DestinationPath  = $item.PlannedDestinationPath
+                            RealNamedPath    = $item.RealNamedPath
+                            SourceHashBefore = $sourceHashBefore
+                            DestHashAfter    = $destHashAfter
+                            Status           = 'MOVED_VERIFIED'
+                            ErrorMessage     = ''
+                            TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
+                        }
+                    }
                 }
-            }
-            else {
-                $executionStatus = 'Skipped'
-                $errorMessage = 'WhatIf or ShouldProcess declined.'
-                $journalSequence++
-                Write-ExecutionJournalEntry -Path $executionJournal -Entry @{
-                    RunStamp         = $stamp
-                    Sequence         = $journalSequence
-                    Phase            = 'SKIPPED'
-                    Hash             = $item.Hash
-                    RecoveredPath    = $item.RecoveredPath
-                    DestinationPath  = $item.PlannedDestinationPath
-                    RealNamedPath    = $item.RealNamedPath
-                    SourceHashBefore = $sourceHashBefore
-                    DestHashAfter    = ''
-                    Status           = 'SKIPPED'
-                    ErrorMessage     = $errorMessage
-                    TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
+                else {
+                    $executionStatus = 'WhatIfSkipped'
+                    $errorMessage = 'WhatIf or ShouldProcess declined.'
                 }
             }
         }
         catch {
-            if ($executionStatus -notin @('VerifyFailed', 'KeeperMissing', 'KeeperHashMismatch', 'Skipped')) {
+            if ($executionStatus -notin $terminalStatuses) {
                 $executionStatus = 'MoveFailed'
                 $errorMessage = $_.Exception.Message
                 $failedCount++
@@ -760,6 +839,25 @@ if ($Execute) {
                     SourceHashBefore = $sourceHashBefore
                     DestHashAfter    = $destHashAfter
                     Status           = 'MOVE_FAILED'
+                    ErrorMessage     = $errorMessage
+                    TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
+                }
+            }
+            elseif ($executionStatus -in @('SourceReparsePoint', 'DestinationReparsePoint', 'SourceReparseCheckFailed', 'DestinationReparseCheckFailed')) {
+                if ([string]::IsNullOrWhiteSpace($errorMessage)) { $errorMessage = $_.Exception.Message }
+                $failedCount++
+                $journalSequence++
+                Write-ExecutionJournalEntry -Path $executionJournal -Entry @{
+                    RunStamp         = $stamp
+                    Sequence         = $journalSequence
+                    Phase            = 'SKIPPED'
+                    Hash             = $item.Hash
+                    RecoveredPath    = $item.RecoveredPath
+                    DestinationPath  = $item.PlannedDestinationPath
+                    RealNamedPath    = $item.RealNamedPath
+                    SourceHashBefore = $sourceHashBefore
+                    DestHashAfter    = ''
+                    Status           = $executionStatus
                     ErrorMessage     = $errorMessage
                     TimestampUtc     = (Get-Date).ToUniversalTime().ToString('o')
                 }
