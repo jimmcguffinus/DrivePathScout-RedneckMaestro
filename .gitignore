@@ -1,0 +1,23 @@
+# Report and inventory outputs - never commit recovered-drive data
+*.csv
+*.log
+*.txt
+hash_scan_log_*.txt
+file_hashes_*.csv
+duplicate_hash_groups_*.csv
+interesting_duplicate_groups_*.csv
+recovered_to_realname_matches_*.csv
+
+# Archives and temp files
+*.tmp
+*.bak
+*.zip
+*.7z
+*.rar
+
+# Report/output folders
+DrivePathInventory/
+reports/
+output/
+_out/
+__pycache__/
