@@ -85,7 +85,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` (not implemented; v0.1 source root: `I:\recover\` only)
+**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.0 (DryRun preflight implemented; `-Execute` not approved)
 
 This staging behavior is **not implemented or approved for execution**.
 
@@ -189,10 +189,11 @@ Cursor should report findings with file and line references. It must not modify 
 - Hash Scout v0.1.5 balanced sample validation
 - Hash Scout v0.1.5 full read-only `I:\` hash scan (155,184 candidates found and hashed; 40,693 duplicate groups; 19,835 interesting groups; 1,590 recovered-to-realname match rows)
 - Move-only staging design spec (`STAGING_SPEC.md`)
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.0 implemented (DryRun preflight only; tested)
 
 **Not yet approved:**
 
-- `Move-RecoveredToRealnameMatches.ps1` implementation
+- `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete

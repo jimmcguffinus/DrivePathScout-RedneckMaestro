@@ -54,6 +54,18 @@ Note: because the repo itself is on `I:\`, scanning `I:\` will include `I:\Drive
 
 When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT Sparky for review.
 
+## Move staging planner (DryRun only)
+
+`Move-RecoveredToRealnameMatches.ps1` v0.1.0 implements move-only staging **preflight** per `STAGING_SPEC.md`. Default mode is DryRun — it does not move, copy, delete, or rename files.
+
+```powershell
+.\Move-RecoveredToRealnameMatches.ps1 `
+  -MatchCsvPath "C:\Users\jim\Desktop\DrivePathInventory\recovered_to_realname_matches_20260703-004335.csv" `
+  -Limit 10
+```
+
+`-Execute` is not approved. v0.1 approved recovered move sources: `I:\recover\` only.
+
 ## Scope
 
-This is an inventory tool, not an organizer. It intentionally contains no copy, move, rename, cleanup, deletion, or long-path-prefix machinery.
+`Get-DriveUniquePaths.ps1` is an inventory tool, not an organizer. `Move-RecoveredToRealnameMatches.ps1` plans staged moves only in DryRun until `-Execute` is explicitly approved.

@@ -327,7 +327,7 @@ Still read-only; no staging/copy/delete.
 
 **Not approved yet:**
 
-- `Move-RecoveredToRealnameMatches.ps1` implementation
+- `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
 - Move/stage **execution**
 - Copy-based staging
 - Delete
@@ -346,10 +346,11 @@ Still read-only; no staging/copy/delete.
 - Hash Scout v0.1.5 full read-only `I:\` hash scan (155,184 candidates found and hashed; 40,693 duplicate groups; 19,835 interesting groups; 1,590 recovered-to-realname match rows)
 - Private GitHub repo initialized (`jimmcguffinus/DrivePathScout-RedneckMaestro`)
 - Move-only staging design spec (`STAGING_SPEC.md`)
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.0 implemented (DryRun preflight only; tested)
 
 **Not yet approved:**
 
-- `Move-RecoveredToRealnameMatches.ps1` implementation
+- `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete
