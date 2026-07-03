@@ -56,7 +56,7 @@ When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT S
 
 ## Move staging planner (DryRun only)
 
-`Move-RecoveredToRealnameMatches.ps1` v0.1.0 implements move-only staging **preflight** per `STAGING_SPEC.md`. Default mode is DryRun — it does not move, copy, delete, or rename files.
+`Move-RecoveredToRealnameMatches.ps1` v0.1.1 implements move-only staging **preflight** per `STAGING_SPEC.md`. Default mode is DryRun — it does not move, copy, delete, or rename files.
 
 ```powershell
 .\Move-RecoveredToRealnameMatches.ps1 `
@@ -64,7 +64,7 @@ When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT S
   -Limit 10
 ```
 
-`-Execute` is not approved. v0.1 approved recovered move sources: `I:\recover\` only.
+`-Execute` is not approved. v0.1.1 adds execute safety hardening (crash-safe journal, fresh keeper hash, reparse-point rejection, WhatIf-safe folder creation). Codex Sparky DryRun planning review passed; Execute remains blocked pending re-review and Jim approval. v0.1 approved recovered move sources: `I:\recover\` only.
 
 ## Scope
 
