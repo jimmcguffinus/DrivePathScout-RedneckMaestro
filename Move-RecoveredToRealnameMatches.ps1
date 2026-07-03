@@ -15,10 +15,13 @@ param(
 
     [int]$Limit,
 
+    [ValidateNotNullOrEmpty()]
+    [string]$OnlyRecoveredPath,
+
     [switch]$Execute
 )
 
-# Drive Recovery Move Stager v0.1.3
+# Drive Recovery Move Stager v0.1.4
 # MOVE only when -Execute is passed. Default is DryRun preflight planning.
 # No Copy-Item. No Remove-Item. Never moves RealNamedPath keepers.
 
@@ -400,6 +403,18 @@ if ($PSBoundParameters.ContainsKey('Limit') -and $Limit -lt 1) {
     throw '-Limit must be at least 1 when specified.'
 }
 
+if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath') -and $PSBoundParameters.ContainsKey('Limit')) {
+    throw '-OnlyRecoveredPath and -Limit cannot be used together. Use -OnlyRecoveredPath for exact single-path targeting, or -Limit for first-N primary items in CSV order.'
+}
+
+$onlyRecoveredPathNormalized = $null
+if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath')) {
+    $onlyRecoveredPathNormalized = Get-NormalizedPath $OnlyRecoveredPath
+    if ([string]::IsNullOrWhiteSpace($onlyRecoveredPathNormalized)) {
+        throw '-OnlyRecoveredPath resolved to an empty path.'
+    }
+}
+
 [void](Test-PathChainRootComponents)
 
 $started = Get-Date
@@ -443,9 +458,9 @@ if ($missingColumns.Count -gt 0) {
     throw "Match CSV is missing required columns: $($missingColumns -join ', ')"
 }
 
-Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.3 mode=$runMode stamp=$stamp"
+Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.4 mode=$runMode stamp=$stamp"
 Write-LogLine -Path $logReport -Message "MatchCsvPath=$MatchCsvPath"
-Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit Execute=$Execute"
+Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath Execute=$Execute"
 
 $recoveredPathSet = @{}
 $realNamedPathSet = @{}
@@ -456,6 +471,26 @@ foreach ($row in $inputRows) {
 $pathRoleConflicts = @{}
 foreach ($key in $recoveredPathSet.Keys) {
     if ($realNamedPathSet.ContainsKey($key)) { $pathRoleConflicts[$key] = $true }
+}
+
+if ($null -ne $onlyRecoveredPathNormalized) {
+    $onlyPathMatches = @(
+        $inputRows | Where-Object {
+            $rp = Get-NormalizedPath $_.RecoveredPath
+            $rp.Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
+        }
+    )
+    if ($onlyPathMatches.Count -eq 0) {
+        throw "-OnlyRecoveredPath did not match any row in the match CSV: $OnlyRecoveredPath"
+    }
+    $onlyDistinctDedupeKeys = @{}
+    foreach ($matchRow in $onlyPathMatches) {
+        $matchKey = Get-DedupeKey -RecoveredPath (Get-NormalizedPath $matchRow.RecoveredPath) -Hash (Get-NormalizedHash $matchRow.Hash)
+        $onlyDistinctDedupeKeys[$matchKey] = $true
+    }
+    if ($onlyDistinctDedupeKeys.Count -gt 1) {
+        throw "-OnlyRecoveredPath matched multiple distinct RecoveredPath+Hash combinations ($($onlyDistinctDedupeKeys.Count)). Ambiguous targeting is not allowed."
+    }
 }
 
 $seenDedupeKeys = @{}
@@ -489,10 +524,21 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
     $sourceVolume = Get-PathVolumeRoot $recoveredPath
     $destinationVolume = Get-PathVolumeRoot $destinationRootNormalized
 
+    $isOnlyRecoveredPathSelected = $true
+    if ($null -ne $onlyRecoveredPathNormalized) {
+        $isOnlyRecoveredPathSelected = $recoveredPath.Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
+    }
+
     if ($seenDedupeKeys.ContainsKey($dedupeKey)) {
         $preflightStatus = 'DuplicateInputRow'
         $preflightMessage = 'Duplicate normalized RecoveredPath+Hash row; primary work item already planned.'
         $isPrimary = $false
+    }
+    elseif ($null -ne $onlyRecoveredPathNormalized -and -not $isOnlyRecoveredPathSelected) {
+        $seenDedupeKeys[$dedupeKey] = $true
+        $isPrimary = $false
+        $preflightStatus = 'Skipped'
+        $preflightMessage = 'Not selected by -OnlyRecoveredPath.'
     }
     else {
         $seenDedupeKeys[$dedupeKey] = $true
@@ -939,6 +985,36 @@ Write-LogLine -Path $logReport -Message "PreflightReport=$preflightReport"
 Write-LogLine -Path $logReport -Message "LogReport=$logReport"
 if ($Execute) { Write-LogLine -Path $logReport -Message "ExecutionReport=$executionReport" }
 Write-LogLine -Path $logReport -Message 'COMPLETE'
+
+if ($null -ne $onlyRecoveredPathNormalized) {
+    $selectedPrimaryRows = @(
+        $preflightRows | Where-Object {
+            $_.IsPrimaryWorkItem -eq 'True' -and
+            (Get-NormalizedPath $_.RecoveredPath).Equals($onlyRecoveredPathNormalized, [StringComparison]::OrdinalIgnoreCase)
+        }
+    )
+    if ($selectedPrimaryRows.Count -ne 1) {
+        throw "-OnlyRecoveredPath expected exactly one primary selected row but found $($selectedPrimaryRows.Count)."
+    }
+    $selectedCandidate = $selectedPrimaryRows[0]
+    Write-Host ''
+    Write-Host '=== -OnlyRecoveredPath Selected Candidate ==='
+    Write-Host "RecoveredPath:     $($selectedCandidate.RecoveredPath)"
+    Write-Host "RealNamedPath:     $($selectedCandidate.RealNamedPath)"
+    Write-Host "Hash:              $($selectedCandidate.Hash)"
+    Write-Host "SizeBytes:         $($selectedCandidate.SizeBytes)"
+    Write-Host "DestinationPath:   $($selectedCandidate.PlannedDestinationPath)"
+    Write-Host "PreflightStatus:   $($selectedCandidate.PreflightStatus)"
+    Write-Host "CollisionSuffix:   $($selectedCandidate.CollisionSuffix)"
+    Write-LogLine -Path $logReport -Message 'ONLYRECOVEREDPATH_SELECTED'
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_RecoveredPath=$($selectedCandidate.RecoveredPath)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_RealNamedPath=$($selectedCandidate.RealNamedPath)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_Hash=$($selectedCandidate.Hash)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_SizeBytes=$($selectedCandidate.SizeBytes)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_DestinationPath=$($selectedCandidate.PlannedDestinationPath)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_PreflightStatus=$($selectedCandidate.PreflightStatus)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPath_CollisionSuffix=$($selectedCandidate.CollisionSuffix)"
+}
 
 Write-Host ''
 Write-Host '=== Move-RecoveredToRealnameMatches Summary ==='

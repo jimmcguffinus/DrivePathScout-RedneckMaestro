@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.3 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
+**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.4 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
 
-DryRun preflight is implemented and trusted for planning. v0.1.3 fixes path-chain volume root safety. Execute remains blocked pending re-review and Jim approval.
+DryRun preflight is implemented and trusted for planning. v0.1.4 adds ``-OnlyRecoveredPath`` exact path targeting for one-file pilot DryRun. Execute remains blocked pending re-review and Jim approval.
 
 ## 3. Hash Scout built
 
@@ -181,7 +181,7 @@ Cursor should report findings with file and line references. It must not modify 
 
 ## 7. Maestro status
 
-**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.3 path-root fix applied. **`-Execute` remains blocked** pending re-review and Jim approval.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.4 OnlyRecoveredPath targeting added. **`-Execute` remains blocked** pending re-review and Jim approval.
 
 **Completed:**
 
@@ -191,13 +191,13 @@ Cursor should report findings with file and line references. It must not modify 
 - Move-only staging design spec (`STAGING_SPEC.md`)
 - `Move-RecoveredToRealnameMatches.ps1` v0.1.0 DryRun preflight (tested)
 - `Move-RecoveredToRealnameMatches.ps1` v0.1.1 execute safety hardening
-- `Move-RecoveredToRealnameMatches.ps1` v0.1.3 path-root safety fix
+- `Move-RecoveredToRealnameMatches.ps1` v0.1.4 OnlyRecoveredPath targeting
 - Codex Sparky DryRun planning review passed
 
 **Not yet approved:**
 
 - `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
-- Codex Sparky Execute approval (pending re-review after v0.1.3)
+- Codex Sparky Execute approval (pending re-review after v0.1.4)
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete
