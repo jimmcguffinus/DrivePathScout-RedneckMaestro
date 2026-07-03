@@ -85,6 +85,8 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
+**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` (not implemented; v0.1 source root: `I:\recover\` only)
+
 This staging behavior is **not implemented or approved for execution**.
 
 ## 3. Hash Scout built
@@ -179,16 +181,18 @@ Cursor should report findings with file and line references. It must not modify 
 
 ## 7. Maestro status
 
-**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). **Next phase: move/stage planning only** — design move-based staging with hash-backed move manifests; no delete, no copy, no execution without Jim approval.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move-only staging **design documented** in `STAGING_SPEC.md`. **Next phase: move/stage planning review** — no delete, no copy, no execution without Jim approval.
 
 **Completed:**
 
 - Path Scout full `I:\` inventory
 - Hash Scout v0.1.5 balanced sample validation
 - Hash Scout v0.1.5 full read-only `I:\` hash scan (155,184 candidates found and hashed; 40,693 duplicate groups; 19,835 interesting groups; 1,590 recovered-to-realname match rows)
+- Move-only staging design spec (`STAGING_SPEC.md`)
 
 **Not yet approved:**
 
+- `Move-RecoveredToRealnameMatches.ps1` implementation
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete
@@ -400,4 +404,4 @@ Current status:
 - Rename/move/delete cleanup: **not approved**
 - Any destructive operation: **not approved**
 
-Safe next action: review full-scan interesting-groups and recovered-match reports. Plan move-based staging with hash-backed move manifests only; do not copy, move, delete, or modify anything on `I:\` without Jim's explicit approval.
+Safe next action: review full-scan interesting-groups and recovered-match reports. Review `STAGING_SPEC.md` for move-only staging design. Plan move-based staging with hash-backed move manifests only; do not copy, move, delete, or modify anything on `I:\` without Jim's explicit approval.
