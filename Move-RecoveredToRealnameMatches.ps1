@@ -21,10 +21,13 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$OnlyRecoveredPathList,
 
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedPathListHash,
+
     [switch]$Execute
 )
 
-# Drive Recovery Move Stager v0.1.5
+# Drive Recovery Move Stager v0.1.6
 # MOVE only when -Execute is passed. Default is DryRun preflight planning.
 # No Copy-Item. No Remove-Item. Never moves RealNamedPath keepers.
 
@@ -55,6 +58,14 @@ function Get-NormalizedPath {
     return $full.TrimEnd([char[]]'\/')
 }
 
+function Get-ApprovedPathListFileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Approved recovered path list not found: $Path"
+    }
+    return Get-NormalizedHash (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+}
+
 function Read-ApprovedRecoveredPathList {
     param([Parameter(Mandatory = $true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -62,6 +73,8 @@ function Read-ApprovedRecoveredPathList {
     }
     $paths = New-Object System.Collections.Generic.List[string]
     $seen = @{}
+    $rawPathCount = 0
+    $duplicatePathCount = 0
     foreach ($line in (Get-Content -LiteralPath $Path)) {
         $trimmed = $line.Trim()
         if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
@@ -70,8 +83,12 @@ function Read-ApprovedRecoveredPathList {
         if ([string]::IsNullOrWhiteSpace($normalized)) {
             throw "Approved recovered path list contains a path that normalized to empty: $trimmed"
         }
+        $rawPathCount++
         $key = $normalized.ToUpperInvariant()
-        if (-not $seen.ContainsKey($key)) {
+        if ($seen.ContainsKey($key)) {
+            $duplicatePathCount++
+        }
+        else {
             $seen[$key] = $true
             [void]$paths.Add($normalized)
         }
@@ -79,7 +96,11 @@ function Read-ApprovedRecoveredPathList {
     if ($paths.Count -eq 0) {
         throw "Approved recovered path list contains no usable paths: $Path"
     }
-    return @($paths)
+    return [pscustomobject]@{
+        Paths              = @($paths)
+        RawPathCount       = $rawPathCount
+        DuplicatePathCount = $duplicatePathCount
+    }
 }
 
 function Test-PathInsideRoot {
@@ -445,9 +466,16 @@ if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath') -and $PSBoundParameters.
     throw '-OnlyRecoveredPath and -Limit cannot be used together. Use -OnlyRecoveredPath for exact single-path targeting, or -Limit for first-N primary items in CSV order.'
 }
 
+if ($PSBoundParameters.ContainsKey('ExpectedPathListHash') -and -not $PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+    throw '-ExpectedPathListHash requires -OnlyRecoveredPathList.'
+}
+
 $onlyRecoveredPathSet = $null
 $onlyRecoveredPathListNormalized = @()
 $onlyRecoveredPathListFile = $null
+$onlyRecoveredPathListFileHash = $null
+$onlyRecoveredPathListRawPathCount = 0
+$onlyRecoveredPathListDuplicatePathCount = 0
 if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath')) {
     $singlePath = Get-NormalizedPath $OnlyRecoveredPath
     if ([string]::IsNullOrWhiteSpace($singlePath)) {
@@ -457,10 +485,33 @@ if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath')) {
 }
 elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
     $onlyRecoveredPathListFile = $OnlyRecoveredPathList
-    $onlyRecoveredPathListNormalized = @(Read-ApprovedRecoveredPathList -Path $OnlyRecoveredPathList)
+    $listReadResult = Read-ApprovedRecoveredPathList -Path $OnlyRecoveredPathList
+    $onlyRecoveredPathListNormalized = @($listReadResult.Paths)
+    $onlyRecoveredPathListRawPathCount = $listReadResult.RawPathCount
+    $onlyRecoveredPathListDuplicatePathCount = $listReadResult.DuplicatePathCount
     $onlyRecoveredPathSet = @{}
     foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
         $onlyRecoveredPathSet[$approvedPath.ToUpperInvariant()] = $approvedPath
+    }
+
+    $onlyRecoveredPathListFileHash = Get-ApprovedPathListFileSha256 -Path $OnlyRecoveredPathList
+    Write-Host "OnlyRecoveredPathList SHA-256: $onlyRecoveredPathListFileHash"
+
+    if ($Execute -and -not $PSBoundParameters.ContainsKey('ExpectedPathListHash')) {
+        throw '-ExpectedPathListHash is required when using -OnlyRecoveredPathList with -Execute.'
+    }
+
+    if ($PSBoundParameters.ContainsKey('ExpectedPathListHash')) {
+        $expectedPathListHashNormalized = Get-NormalizedHash $ExpectedPathListHash
+        if ($onlyRecoveredPathListFileHash -ne $expectedPathListHashNormalized) {
+            throw @"
+Approved path list SHA-256 mismatch.
+  List path:     $onlyRecoveredPathListFile
+  Expected hash: $expectedPathListHashNormalized
+  Actual hash:   $onlyRecoveredPathListFileHash
+"@
+        }
+        Write-Host "OnlyRecoveredPathList expected SHA-256: $expectedPathListHashNormalized (verified)"
     }
 }
 
@@ -507,9 +558,12 @@ if ($missingColumns.Count -gt 0) {
     throw "Match CSV is missing required columns: $($missingColumns -join ', ')"
 }
 
-Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.5 mode=$runMode stamp=$stamp"
+Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.6 mode=$runMode stamp=$stamp"
 Write-LogLine -Path $logReport -Message "MatchCsvPath=$MatchCsvPath"
-Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath OnlyRecoveredPathList=$OnlyRecoveredPathList Execute=$Execute"
+Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath OnlyRecoveredPathList=$OnlyRecoveredPathList ExpectedPathListHash=$ExpectedPathListHash Execute=$Execute"
+if ($null -ne $onlyRecoveredPathListFileHash) {
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_FileSha256=$onlyRecoveredPathListFileHash"
+}
 
 $recoveredPathSet = @{}
 $realNamedPathSet = @{}
@@ -816,13 +870,75 @@ $executionRows = New-Object System.Collections.Generic.List[object]
 $movedCount = 0
 $failedCount = 0
 $journalSequence = 0
+$batchExecuteReadyStatuses = @('DryRunReady', 'CollisionRenamed')
+
+if ($Execute -and $PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+    $batchValidationOffenders = New-Object System.Collections.Generic.List[object]
+    if ($selectedCandidates.Count -ne $onlyRecoveredPathListNormalized.Count) {
+        [void]$batchValidationOffenders.Add([pscustomobject]@{
+            RecoveredPath    = '(batch)'
+            PreflightStatus  = 'BatchValidationFailed'
+            PreflightMessage = "Selected primary count $($selectedCandidates.Count) does not equal unique requested path count $($onlyRecoveredPathListNormalized.Count)."
+        })
+    }
+    foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
+        $pathPrimaryRows = @(
+            $selectedCandidates | Where-Object {
+                (Get-NormalizedPath $_.RecoveredPath).Equals($approvedPath, [StringComparison]::OrdinalIgnoreCase)
+            }
+        )
+        if ($pathPrimaryRows.Count -eq 0) {
+            [void]$batchValidationOffenders.Add([pscustomobject]@{
+                RecoveredPath    = $approvedPath
+                PreflightStatus  = 'ZeroMatch'
+                PreflightMessage = 'No primary candidate matched this approved path.'
+            })
+        }
+        elseif ($pathPrimaryRows.Count -gt 1) {
+            [void]$batchValidationOffenders.Add([pscustomobject]@{
+                RecoveredPath    = $approvedPath
+                PreflightStatus  = 'AmbiguousMatch'
+                PreflightMessage = "Multiple primary candidates matched this approved path ($($pathPrimaryRows.Count))."
+            })
+        }
+        elseif ($pathPrimaryRows[0].PreflightStatus -notin $batchExecuteReadyStatuses) {
+            [void]$batchValidationOffenders.Add([pscustomobject]@{
+                RecoveredPath    = $pathPrimaryRows[0].RecoveredPath
+                PreflightStatus  = $pathPrimaryRows[0].PreflightStatus
+                PreflightMessage = $pathPrimaryRows[0].PreflightMessage
+            })
+        }
+    }
+    if ($batchValidationOffenders.Count -gt 0) {
+        Write-Host ''
+        Write-Host '=== BatchValidationFailed ==='
+        Write-Host 'Batch Execute aborted before any Move-Item. No files were moved.'
+        Write-LogLine -Path $logReport -Message 'BATCH_VALIDATION_FAILED'
+        Write-LogLine -Path $logReport -Message "BatchValidationFailed_OffenderCount=$($batchValidationOffenders.Count)"
+        foreach ($offender in $batchValidationOffenders) {
+            Write-Host "  RecoveredPath: $($offender.RecoveredPath)"
+            Write-Host "  Status:        $($offender.PreflightStatus)"
+            Write-Host "  Message:       $($offender.PreflightMessage)"
+            Write-Host ''
+            Write-LogLine -Path $logReport -Message ("BatchValidationFailed_Offender RecoveredPath={0} Status={1} Message={2}" -f $offender.RecoveredPath, $offender.PreflightStatus, $offender.PreflightMessage)
+        }
+        throw 'Batch Execute aborted: one or more approved paths are not ready for batch movement. No files were moved.'
+    }
+    Write-LogLine -Path $logReport -Message 'BATCH_VALIDATION_PASSED'
+    Write-LogLine -Path $logReport -Message "BatchValidationPassed_ReadyCount=$($selectedCandidates.Count)"
+}
 
 if ($Execute) {
-    $movableRows = @(
-        $preflightRows | Where-Object {
-            $_.IsPrimaryWorkItem -eq 'True' -and $_.PreflightStatus -in @('DryRunReady', 'CollisionRenamed')
-        }
-    )
+    if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+        $movableRows = @($selectedCandidates)
+    }
+    else {
+        $movableRows = @(
+            $preflightRows | Where-Object {
+                $_.IsPrimaryWorkItem -eq 'True' -and $_.PreflightStatus -in $batchExecuteReadyStatuses
+            }
+        )
+    }
 
     foreach ($item in $movableRows) {
         $moveStarted = Get-Date
@@ -1114,13 +1230,25 @@ elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
     Write-Host ''
     Write-Host '=== -OnlyRecoveredPathList Selection Summary ==='
     Write-Host "PathListFile:                 $onlyRecoveredPathListFile"
-    Write-Host "RequestedPathCount:             $($onlyRecoveredPathListNormalized.Count)"
+    Write-Host "PathListSha256:               $onlyRecoveredPathListFileHash"
+    if ($PSBoundParameters.ContainsKey('ExpectedPathListHash')) {
+        Write-Host "ExpectedPathListHash:         $(Get-NormalizedHash $ExpectedPathListHash) (verified)"
+    }
+    Write-Host "RequestedPathCount:           $($onlyRecoveredPathListNormalized.Count)"
+    Write-Host "RawPathLineCount:             $onlyRecoveredPathListRawPathCount"
+    Write-Host "DuplicatePathLineCount:       $onlyRecoveredPathListDuplicatePathCount"
     Write-Host "SelectedPrimaryCount:         $($selectedCandidates.Count)"
     Write-Host "MissingRequestedPathCount:    $missingRequestedPathCount"
     Write-Host "AmbiguousRequestedPathCount:  $ambiguousRequestedPathCount"
     Write-LogLine -Path $logReport -Message 'ONLYRECOVEREDPATHLIST_SELECTED'
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_File=$onlyRecoveredPathListFile"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_FileSha256=$onlyRecoveredPathListFileHash"
+    if ($PSBoundParameters.ContainsKey('ExpectedPathListHash')) {
+        Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_ExpectedSha256=$(Get-NormalizedHash $ExpectedPathListHash)"
+    }
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_RequestedPathCount=$($onlyRecoveredPathListNormalized.Count)"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_RawPathLineCount=$onlyRecoveredPathListRawPathCount"
+    Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_DuplicatePathLineCount=$onlyRecoveredPathListDuplicatePathCount"
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_SelectedPrimaryCount=$($selectedCandidates.Count)"
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_MissingRequestedPathCount=$missingRequestedPathCount"
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_AmbiguousRequestedPathCount=$ambiguousRequestedPathCount"

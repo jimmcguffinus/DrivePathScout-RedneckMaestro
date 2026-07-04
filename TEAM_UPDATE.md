@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.5 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
+**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.6 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
 
-DryRun preflight is implemented and trusted for planning. v0.1.5 adds ``-OnlyRecoveredPathList`` for approved batch pilots exact path targeting for one-file pilot DryRun. Execute remains blocked pending re-review and Jim approval.
+DryRun preflight is implemented and trusted for planning. v0.1.6 adds `-ExpectedPathListHash` and all-or-nothing batch Execute gate for `-OnlyRecoveredPathList`. Execute remains blocked pending re-review and Jim approval.
 
 ## 3. Hash Scout built
 
@@ -181,7 +181,7 @@ Cursor should report findings with file and line references. It must not modify 
 
 ## 7. Maestro status
 
-**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.5 OnlyRecoveredPathList targeting added. **`-Execute` remains blocked** pending re-review and Jim approval.
+**Current phase:** Full `I:\` read-only hash scan **completed** (20260703-004335). Move staging DryRun planning **passed** Codex Sparky review. v0.1.6 list-hash binding and batch Execute gate added. **`-Execute` remains blocked** pending re-review and Jim approval.
 
 **Completed:**
 
@@ -197,7 +197,7 @@ Cursor should report findings with file and line references. It must not modify 
 **Not yet approved:**
 
 - `Move-RecoveredToRealnameMatches.ps1` **-Execute** (moves)
-- Codex Sparky Execute approval (pending re-review after v0.1.5)
+- Codex Sparky Execute approval (pending re-review after v0.1.6)
 - Move/stage **execution** (planning only for now)
 - Copy-based staging
 - Delete

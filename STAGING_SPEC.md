@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.5. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.5 OnlyRecoveredPathList review and Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.6. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.6 list-hash and batch-gate review and Jim approval.
 
-**Version:** v0.1.5 (`-OnlyRecoveredPath` exact targeting; `-Execute` still not approved)
+**Version:** v0.1.6 (`-OnlyRecoveredPathList` + `-ExpectedPathListHash`; all-or-nothing batch Execute gate; `-Execute` still not approved)
 
 **Date:** 2026-07-03
 
@@ -164,7 +164,7 @@ Created in **DryRun** and **Execute**. Contains every input row (including `Dupl
 
 ### Phase 5 — Execute (only with `-Execute` + Jim approval)
 
-**Not approved as of v0.1.5.** Code exists but must pass another Codex Sparky review and Jim approval before use.
+**Not approved as of v0.1.6.** Code exists but must pass another Codex Sparky review and Jim approval before use.
 
 1. Re-run full preflight checks.
 2. Move only rows with `DryRunReady` or `CollisionRenamed`.
@@ -420,6 +420,11 @@ Do **not** implement or use:
 
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
+
+**Resolved in v0.1.6:**
+
+- `-ExpectedPathListHash` binds approved list file contents via SHA-256 (required for list + `-Execute`).
+- All-or-nothing batch Execute gate: every requested path must reach `DryRunReady` or `CollisionRenamed` before any `Move-Item`.
 
 **Resolved in v0.1.4:**
 
