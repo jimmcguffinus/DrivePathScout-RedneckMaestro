@@ -78,7 +78,9 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 | HIGH theme_assets | `...\theme_assets` | `high_confidence_junk\...` | Execute verified (51) |
 | GIF | `...\images\gif` | `medium_review\gif` | Execute verified (28) |
 | CSV | `...\data\csv` | `medium_review\csv` | Execute verified (24) |
-| Suns/PNG | flat under `recovered_to_realname` | `medium_review\suns_png` | **DryRun ready (28)** |
+| Suns/PNG | flat under `recovered_to_realname` | `medium_review\suns_png` | Execute verified (28) |
+
+**05_DELETE_REVIEW total:** 1,411 files (1,280 + 51 + 28 + 24 + 28). **04_DUPLICATES_STAGED:** 66 PST files only (HOLD).
 
 Build plans:
 
@@ -95,7 +97,7 @@ Build plans:
   -LaneProfile SunsPngMedium
 ```
 
-Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. PST lane (66 files) remains HOLD.
+Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. All medium-review lanes Execute verified. PST lane (66 files) remains HOLD pending policy review.
 
 ## Parked final-delete tool
 
