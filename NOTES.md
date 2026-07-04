@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** PST human-review move DryRun ready (`approved_pst_human_review_move_plan_20260704.csv`, 66 files → `06_HUMAN_REVIEW\mail\pst_duplicates`). Suns/PNG Execute verified. **Do not run PST `-Execute` without Jim approval of exact plan hash.** 04_DUPLICATES_STAGED remains PST-only (66, HOLD until move authorized).
+**Safe next step:** v0.2.6 PST human-review Execute **verified** (66 files → `06_HUMAN_REVIEW\mail\pst_duplicates`). **04_DUPLICATES_STAGED cleared** (0 files; empty directory scaffolding only). Workbench board: 02_KEEPERS_REVIEW (15 PST), 05_DELETE_REVIEW (1,411), 06_HUMAN_REVIEW (66 PST). No hard delete. Recommend human review of delete-review and human-review lanes — no auto-delete.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 

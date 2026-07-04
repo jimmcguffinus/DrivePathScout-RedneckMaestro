@@ -87,7 +87,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 
 **Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH
 
-HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28) Execute verified. **PST human-review DryRun ready** (66 files, plan hash `5C7E7856…`). PST `-Execute` blocked pending Jim approval. 04_DUPLICATES_STAGED: PST-only (66).
+HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28), PST (66) Execute verified. **04_DUPLICATES_STAGED:** 0 files (cleared). **06_HUMAN_REVIEW:** 66 PST duplicates. MOVE-only; no hard delete, no copy, no keeper movement, no PST opened.
 
 ## 3. Hash Scout built
 

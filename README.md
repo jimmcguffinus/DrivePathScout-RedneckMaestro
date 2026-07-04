@@ -79,9 +79,9 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 | GIF | `...\images\gif` | `05_DELETE_REVIEW\medium_review\gif` | Execute verified (28) |
 | CSV | `...\data\csv` | `05_DELETE_REVIEW\medium_review\csv` | Execute verified (24) |
 | Suns/PNG | flat under `recovered_to_realname` | `05_DELETE_REVIEW\medium_review\suns_png` | Execute verified (28) |
-| PST | `...\mail\pst` | `06_HUMAN_REVIEW\mail\pst_duplicates` | **DryRun ready (66)** |
+| PST | `...\mail\pst` | `06_HUMAN_REVIEW\mail\pst_duplicates` | Execute verified (66) |
 
-**05_DELETE_REVIEW total:** 1,411 files. **04_DUPLICATES_STAGED:** 66 PST files (HOLD until PST move authorized).
+**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 1,411 files / 35,731,729 bytes. **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged).
 
 Build plans:
 
@@ -99,7 +99,7 @@ Build plans:
   -LaneProfile PstHumanReview
 ```
 
-Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. PST `-Execute` blocked pending Jim approval.
+Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. All lane Execute operations verified. Staging lane cleared.
 
 ## Parked final-delete tool
 
