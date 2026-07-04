@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.6 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
+- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.7 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
 
 **Meaning:**
 
@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-Limit` or `-OnlyRecoveredPathList` as needed. **Do not run `-Execute`.** Pending Codex Sparky Execute review and Jim approval after v0.1.6 list-hash and batch-gate hardening.
+**Safe next step:** DryRun preflight planning is trusted. Re-run DryRun with `-ApprovedBatchPlan` or other selectors as needed. **Do not run `-Execute`.** Pending Codex review and Jim approval after v0.1.7 routed batch plan support.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 

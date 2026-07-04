@@ -24,10 +24,16 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$ExpectedPathListHash,
 
+    [ValidateNotNullOrEmpty()]
+    [string]$ApprovedBatchPlan,
+
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedApprovedBatchPlanHash,
+
     [switch]$Execute
 )
 
-# Drive Recovery Move Stager v0.1.6
+# Drive Recovery Move Stager v0.1.7
 # MOVE only when -Execute is passed. Default is DryRun preflight planning.
 # No Copy-Item. No Remove-Item. Never moves RealNamedPath keepers.
 
@@ -98,6 +104,92 @@ function Read-ApprovedRecoveredPathList {
     }
     return [pscustomobject]@{
         Paths              = @($paths)
+        RawPathCount       = $rawPathCount
+        DuplicatePathCount = $duplicatePathCount
+    }
+}
+
+function Get-ApprovedBatchPlanFileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Approved batch plan not found: $Path"
+    }
+    return Get-NormalizedHash (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+}
+
+function Test-SafeDestinationSubfolder {
+    param([Parameter(Mandatory = $true)][string]$Subfolder)
+    if ([string]::IsNullOrWhiteSpace($Subfolder)) {
+        throw 'DestinationSubfolder cannot be empty.'
+    }
+    $trimmed = $Subfolder.Trim().TrimStart([char[]]'\/').TrimEnd([char[]]'\/')
+    if ([string]::IsNullOrWhiteSpace($trimmed)) {
+        throw "DestinationSubfolder resolved to empty after normalization: $Subfolder"
+    }
+    if ($trimmed -match '\.\.') {
+        throw "DestinationSubfolder contains '..': $Subfolder"
+    }
+    if ($trimmed -match '^[a-zA-Z]:') {
+        throw "DestinationSubfolder must be relative; drive letter not allowed: $Subfolder"
+    }
+    if ($Subfolder -match '^[\\/]') {
+        throw "DestinationSubfolder must be relative; leading slash not allowed: $Subfolder"
+    }
+    if ($trimmed.IndexOfAny([char[]][IO.Path]::GetInvalidPathChars()) -ge 0) {
+        throw "DestinationSubfolder contains invalid path characters: $Subfolder"
+    }
+    foreach ($segment in ($trimmed -split '[\\/]')) {
+        if ([string]::IsNullOrWhiteSpace($segment)) { continue }
+        if ($script:ReservedDeviceNames -contains $segment.ToUpperInvariant()) {
+            throw "DestinationSubfolder contains reserved device name '$segment': $Subfolder"
+        }
+    }
+    return ($trimmed -replace '/', '\')
+}
+
+function Read-ApprovedBatchPlan {
+    param([Parameter(Mandatory = $true)][string]$PlanPath)
+    if (-not (Test-Path -LiteralPath $PlanPath)) {
+        throw "Approved batch plan not found: $PlanPath"
+    }
+    $rows = @(Import-Csv -LiteralPath $PlanPath)
+    if ($rows.Count -eq 0) {
+        throw "Approved batch plan contains no rows: $PlanPath"
+    }
+    $required = @('RecoveredPath', 'DestinationSubfolder', 'ReviewClass', 'MoveLane')
+    $missing = @($required | Where-Object { $rows[0].PSObject.Properties.Name -notcontains $_ })
+    if ($missing.Count -gt 0) {
+        throw "Approved batch plan is missing required columns: $($missing -join ', ')"
+    }
+    $entries = New-Object System.Collections.Generic.List[object]
+    $seen = @{}
+    $rawPathCount = 0
+    $duplicatePathCount = 0
+    foreach ($row in $rows) {
+        $normalizedPath = Get-NormalizedPath $row.RecoveredPath
+        if ([string]::IsNullOrWhiteSpace($normalizedPath)) {
+            throw "Approved batch plan contains a path that normalized to empty: $($row.RecoveredPath)"
+        }
+        $subfolder = Test-SafeDestinationSubfolder -Subfolder $row.DestinationSubfolder
+        $rawPathCount++
+        $key = $normalizedPath.ToUpperInvariant()
+        if ($seen.ContainsKey($key)) {
+            $duplicatePathCount++
+            continue
+        }
+        $seen[$key] = $true
+        [void]$entries.Add([pscustomobject]@{
+            RecoveredPath        = $normalizedPath
+            DestinationSubfolder = $subfolder
+            ReviewClass          = $row.ReviewClass
+            MoveLane             = $row.MoveLane
+        })
+    }
+    if ($entries.Count -eq 0) {
+        throw "Approved batch plan contains no usable paths: $PlanPath"
+    }
+    return [pscustomobject]@{
+        Entries            = @($entries.ToArray())
         RawPathCount       = $rawPathCount
         DuplicatePathCount = $duplicatePathCount
     }
@@ -470,18 +562,42 @@ if ($PSBoundParameters.ContainsKey('ExpectedPathListHash') -and -not $PSBoundPar
     throw '-ExpectedPathListHash requires -OnlyRecoveredPathList.'
 }
 
+if ($PSBoundParameters.ContainsKey('ExpectedApprovedBatchPlanHash') -and -not $PSBoundParameters.ContainsKey('ApprovedBatchPlan')) {
+    throw '-ExpectedApprovedBatchPlanHash requires -ApprovedBatchPlan.'
+}
+
+if ($PSBoundParameters.ContainsKey('ApprovedBatchPlan')) {
+    if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath')) {
+        throw '-ApprovedBatchPlan and -OnlyRecoveredPath cannot be used together. Use one approved selector only.'
+    }
+    if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+        throw '-ApprovedBatchPlan and -OnlyRecoveredPathList cannot be used together. Use one approved selector only.'
+    }
+    if ($PSBoundParameters.ContainsKey('Limit')) {
+        throw '-ApprovedBatchPlan and -Limit cannot be used together. Use -ApprovedBatchPlan for routed batch targeting.'
+    }
+}
+
 $onlyRecoveredPathSet = $null
 $onlyRecoveredPathListNormalized = @()
 $onlyRecoveredPathListFile = $null
 $onlyRecoveredPathListFileHash = $null
 $onlyRecoveredPathListRawPathCount = 0
 $onlyRecoveredPathListDuplicatePathCount = 0
+$approvedBatchPlanFile = $null
+$approvedBatchPlanFileHash = $null
+$approvedBatchPlanNormalized = @()
+$approvedBatchPlanRawPathCount = 0
+$approvedBatchPlanDuplicatePathCount = 0
+$approvedBatchPlanRoutes = $null
+$approvedSelectionNormalized = @()
 if ($PSBoundParameters.ContainsKey('OnlyRecoveredPath')) {
     $singlePath = Get-NormalizedPath $OnlyRecoveredPath
     if ([string]::IsNullOrWhiteSpace($singlePath)) {
         throw '-OnlyRecoveredPath resolved to an empty path.'
     }
     $onlyRecoveredPathSet = @{ $singlePath.ToUpperInvariant() = $singlePath }
+    $approvedSelectionNormalized = @($singlePath)
 }
 elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
     $onlyRecoveredPathListFile = $OnlyRecoveredPathList
@@ -512,6 +628,42 @@ Approved path list SHA-256 mismatch.
 "@
         }
         Write-Host "OnlyRecoveredPathList expected SHA-256: $expectedPathListHashNormalized (verified)"
+    }
+    $approvedSelectionNormalized = @($onlyRecoveredPathListNormalized)
+}
+elseif ($PSBoundParameters.ContainsKey('ApprovedBatchPlan')) {
+    $approvedBatchPlanFile = $ApprovedBatchPlan
+    $batchPlanReadResult = Read-ApprovedBatchPlan -PlanPath $ApprovedBatchPlan
+    $approvedBatchPlanNormalized = @($batchPlanReadResult.Entries | ForEach-Object { $_.RecoveredPath })
+    $approvedBatchPlanRawPathCount = $batchPlanReadResult.RawPathCount
+    $approvedBatchPlanDuplicatePathCount = $batchPlanReadResult.DuplicatePathCount
+    $approvedBatchPlanRoutes = @{}
+    $onlyRecoveredPathSet = @{}
+    foreach ($entry in $batchPlanReadResult.Entries) {
+        $pathKey = $entry.RecoveredPath.ToUpperInvariant()
+        $onlyRecoveredPathSet[$pathKey] = $entry.RecoveredPath
+        $approvedBatchPlanRoutes[$pathKey] = $entry
+    }
+    $approvedSelectionNormalized = @($approvedBatchPlanNormalized)
+
+    $approvedBatchPlanFileHash = Get-ApprovedBatchPlanFileSha256 -Path $ApprovedBatchPlan
+    Write-Host "ApprovedBatchPlan SHA-256: $approvedBatchPlanFileHash"
+
+    if ($Execute -and -not $PSBoundParameters.ContainsKey('ExpectedApprovedBatchPlanHash')) {
+        throw '-ExpectedApprovedBatchPlanHash is required when using -ApprovedBatchPlan with -Execute.'
+    }
+
+    if ($PSBoundParameters.ContainsKey('ExpectedApprovedBatchPlanHash')) {
+        $expectedBatchPlanHashNormalized = Get-NormalizedHash $ExpectedApprovedBatchPlanHash
+        if ($approvedBatchPlanFileHash -ne $expectedBatchPlanHashNormalized) {
+            throw @"
+Approved batch plan SHA-256 mismatch.
+  Plan path:     $approvedBatchPlanFile
+  Expected hash: $expectedBatchPlanHashNormalized
+  Actual hash:   $approvedBatchPlanFileHash
+"@
+        }
+        Write-Host "ApprovedBatchPlan expected SHA-256: $expectedBatchPlanHashNormalized (verified)"
     }
 }
 
@@ -558,11 +710,14 @@ if ($missingColumns.Count -gt 0) {
     throw "Match CSV is missing required columns: $($missingColumns -join ', ')"
 }
 
-Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.6 mode=$runMode stamp=$stamp"
+Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.7 mode=$runMode stamp=$stamp"
 Write-LogLine -Path $logReport -Message "MatchCsvPath=$MatchCsvPath"
-Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath OnlyRecoveredPathList=$OnlyRecoveredPathList ExpectedPathListHash=$ExpectedPathListHash Execute=$Execute"
+Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath OnlyRecoveredPathList=$OnlyRecoveredPathList ExpectedPathListHash=$ExpectedPathListHash ApprovedBatchPlan=$ApprovedBatchPlan ExpectedApprovedBatchPlanHash=$ExpectedApprovedBatchPlanHash Execute=$Execute"
 if ($null -ne $onlyRecoveredPathListFileHash) {
     Write-LogLine -Path $logReport -Message "OnlyRecoveredPathList_FileSha256=$onlyRecoveredPathListFileHash"
+}
+if ($null -ne $approvedBatchPlanFileHash) {
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_FileSha256=$approvedBatchPlanFileHash"
 }
 
 $recoveredPathSet = @{}
@@ -577,7 +732,7 @@ foreach ($key in $recoveredPathSet.Keys) {
 }
 
 if ($null -ne $onlyRecoveredPathSet) {
-    $approvedPathsToValidate = if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) { $onlyRecoveredPathListNormalized } else { @($onlyRecoveredPathSet.Values) }
+    $approvedPathsToValidate = @($approvedSelectionNormalized)
     foreach ($approvedPath in $approvedPathsToValidate) {
         $onlyPathMatches = @(
             $inputRows | Where-Object {
@@ -627,6 +782,9 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
     $desiredDestinationName = ''
     $plannedDestinationName = ''
     $plannedDestinationPath = ''
+    $destinationSubfolder = ''
+    $reviewClass = ''
+    $moveLane = ''
     $sourceVolume = Get-PathVolumeRoot $recoveredPath
     $destinationVolume = Get-PathVolumeRoot $destinationRootNormalized
 
@@ -644,7 +802,10 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
         $seenDedupeKeys[$dedupeKey] = $true
         $isPrimary = $false
         $preflightStatus = 'Skipped'
-        $preflightMessage = if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+        $preflightMessage = if ($PSBoundParameters.ContainsKey('ApprovedBatchPlan')) {
+            'Not selected by -ApprovedBatchPlan.'
+        }
+        elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
             'Not selected by -OnlyRecoveredPathList.'
         } else {
             'Not selected by -OnlyRecoveredPath.'
@@ -654,6 +815,18 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
         $seenDedupeKeys[$dedupeKey] = $true
         $isPrimary = $true
         $primaryWorkCount++
+
+        if ($null -ne $approvedBatchPlanRoutes -and $approvedBatchPlanRoutes.ContainsKey($recoveredPath.ToUpperInvariant())) {
+            $route = $approvedBatchPlanRoutes[$recoveredPath.ToUpperInvariant()]
+            $destinationSubfolder = $route.DestinationSubfolder
+            $reviewClass = $route.ReviewClass
+            $moveLane = $route.MoveLane
+        }
+        $rowDestinationRoot = if ([string]::IsNullOrWhiteSpace($destinationSubfolder)) {
+            $destinationRootNormalized
+        } else {
+            Join-Path $destinationRootNormalized $destinationSubfolder
+        }
 
         if ($PSBoundParameters.ContainsKey('Limit') -and $primaryWorkCount -gt $Limit) {
             $preflightStatus = 'Skipped'
@@ -757,15 +930,15 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
                 if ($preflightStatus -eq 'DryRunReady') {
                     $desiredDestinationName = Get-DesiredDestinationName -Hash $hash -RecoveredFileName $row.RecoveredFileName -RealNamedFileName $row.RealNamedFileName
                     $plannedDestinationName = $desiredDestinationName
-                    $plannedDestinationPath = Join-Path $destinationRootNormalized $plannedDestinationName
+                    $plannedDestinationPath = Join-Path $rowDestinationRoot $plannedDestinationName
                     if ($plannedDestinationPath.Length -gt $script:MaxDestinationPathLength) {
                         $plannedDestinationName = Get-ShortenedDestinationName -DesiredName $desiredDestinationName -Hash $hash `
                             -RecoveredFileName $row.RecoveredFileName -RealNamedFileName $row.RealNamedFileName `
-                            -DestinationRoot $destinationRootNormalized
-                        $plannedDestinationPath = Join-Path $destinationRootNormalized $plannedDestinationName
+                            -DestinationRoot $rowDestinationRoot
+                        $plannedDestinationPath = Join-Path $rowDestinationRoot $plannedDestinationName
                         $preflightMessage = 'Destination path shortened to fit length limits.'
                     }
-                    $unique = Get-UniqueDestinationName -BaseFileName $plannedDestinationName -DestinationRoot $destinationRootNormalized -ReservedNames $reservedDestinationNames
+                    $unique = Get-UniqueDestinationName -BaseFileName $plannedDestinationName -DestinationRoot $rowDestinationRoot -ReservedNames $reservedDestinationNames
                     $plannedDestinationName = $unique.PlannedDestinationName
                     $plannedDestinationPath = $unique.PlannedDestinationPath
                     $collisionSuffix = $unique.CollisionSuffix
@@ -805,6 +978,9 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
             DesiredDestinationName  = $desiredDestinationName
             PlannedDestinationName  = $plannedDestinationName
             PlannedDestinationPath  = $plannedDestinationPath
+            DestinationSubfolder    = $destinationSubfolder
+            ReviewClass             = $reviewClass
+            MoveLane                = $moveLane
             SizeBytes               = $row.SizeBytes
             Extension               = $row.Extension
             SourceVolume            = $sourceVolume
@@ -825,11 +1001,19 @@ $preflightColumns = @(
     'PreflightId', 'InputRowNumber', 'IsPrimaryWorkItem', 'DedupeKey', 'MatchCsvPath', 'MatchCsvStamp',
     'Hash', 'ShortHash', 'RecoveredPath', 'RealNamedPath', 'RecoveredFileName', 'RealNamedFileName',
     'SuggestedDuplicateName', 'DesiredDestinationName', 'PlannedDestinationName', 'PlannedDestinationPath',
+    'DestinationSubfolder', 'ReviewClass', 'MoveLane',
     'SizeBytes', 'Extension', 'SourceVolume', 'DestinationVolume', 'KeeperExists', 'KeeperHashMatches',
     'SourceExists', 'SourceHashMatches', 'CollisionSuffix', 'PreflightStatus', 'PreflightMessage',
     'RunMode', 'PreflightAtUtc'
 )
 Export-ReportCsv -Rows ([object[]]$preflightRows) -Columns $preflightColumns -Path $preflightReport
+
+$preflightPrimaryByRecoveredPath = @{}
+foreach ($pr in $preflightRows) {
+    if ($pr.IsPrimaryWorkItem -eq 'True') {
+        $preflightPrimaryByRecoveredPath[(Get-NormalizedPath $pr.RecoveredPath).ToUpperInvariant()] = $pr
+    }
+}
 
 $selectedCandidate = $null
 $selectedCandidates = @()
@@ -848,18 +1032,21 @@ if ($null -ne $onlyRecoveredPathSet) {
         $selectedCandidates = @($selectedCandidate)
     }
     else {
-        $expectedSelectedCount = $onlyRecoveredPathListNormalized.Count
+        $expectedSelectedCount = $approvedSelectionNormalized.Count
         if ($selectedPrimaryRows.Count -ne $expectedSelectedCount) {
-            throw "-OnlyRecoveredPathList expected $expectedSelectedCount primary selected rows but found $($selectedPrimaryRows.Count)."
+            $selectorLabel = if ($PSBoundParameters.ContainsKey('ApprovedBatchPlan')) { '-ApprovedBatchPlan' } else { '-OnlyRecoveredPathList' }
+            throw "$selectorLabel expected $expectedSelectedCount primary selected rows but found $($selectedPrimaryRows.Count)."
         }
-        foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
-            $pathMatches = @(
-                $selectedPrimaryRows | Where-Object {
-                    (Get-NormalizedPath $_.RecoveredPath).Equals($approvedPath, [StringComparison]::OrdinalIgnoreCase)
-                }
-            )
-            if ($pathMatches.Count -ne 1) {
-                throw "-OnlyRecoveredPathList expected exactly one primary selected row for approved path but found $($pathMatches.Count): $approvedPath"
+        foreach ($approvedPath in $approvedSelectionNormalized) {
+            $pathKey = (Get-NormalizedPath $approvedPath).ToUpperInvariant()
+            if (-not $preflightPrimaryByRecoveredPath.ContainsKey($pathKey)) {
+                $selectorLabel = if ($PSBoundParameters.ContainsKey('ApprovedBatchPlan')) { '-ApprovedBatchPlan' } else { '-OnlyRecoveredPathList' }
+                throw "$selectorLabel expected exactly one primary selected row for approved path but found 0: $approvedPath"
+            }
+            $pathMatch = $preflightPrimaryByRecoveredPath[$pathKey]
+            if ($null -eq $pathMatch) {
+                $selectorLabel = if ($PSBoundParameters.ContainsKey('ApprovedBatchPlan')) { '-ApprovedBatchPlan' } else { '-OnlyRecoveredPathList' }
+                throw "$selectorLabel expected exactly one primary selected row for approved path but found 0: $approvedPath"
             }
         }
         $selectedCandidates = $selectedPrimaryRows
@@ -872,16 +1059,16 @@ $failedCount = 0
 $journalSequence = 0
 $batchExecuteReadyStatuses = @('DryRunReady', 'CollisionRenamed')
 
-if ($Execute -and $PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+if ($Execute -and ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList') -or $PSBoundParameters.ContainsKey('ApprovedBatchPlan'))) {
     $batchValidationOffenders = New-Object System.Collections.Generic.List[object]
-    if ($selectedCandidates.Count -ne $onlyRecoveredPathListNormalized.Count) {
+    if ($selectedCandidates.Count -ne $approvedSelectionNormalized.Count) {
         [void]$batchValidationOffenders.Add([pscustomobject]@{
             RecoveredPath    = '(batch)'
             PreflightStatus  = 'BatchValidationFailed'
-            PreflightMessage = "Selected primary count $($selectedCandidates.Count) does not equal unique requested path count $($onlyRecoveredPathListNormalized.Count)."
+            PreflightMessage = "Selected primary count $($selectedCandidates.Count) does not equal unique approved path count $($approvedSelectionNormalized.Count)."
         })
     }
-    foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
+    foreach ($approvedPath in $approvedSelectionNormalized) {
         $pathPrimaryRows = @(
             $selectedCandidates | Where-Object {
                 (Get-NormalizedPath $_.RecoveredPath).Equals($approvedPath, [StringComparison]::OrdinalIgnoreCase)
@@ -929,7 +1116,7 @@ if ($Execute -and $PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
 }
 
 if ($Execute) {
-    if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
+    if ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList') -or $PSBoundParameters.ContainsKey('ApprovedBatchPlan')) {
         $movableRows = @($selectedCandidates)
     }
     else {
@@ -1214,17 +1401,9 @@ elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
     $missingRequestedPathCount = 0
     $ambiguousRequestedPathCount = 0
     foreach ($approvedPath in $onlyRecoveredPathListNormalized) {
-        $pathPrimaryRows = @(
-            $preflightRows | Where-Object {
-                $_.IsPrimaryWorkItem -eq 'True' -and
-                (Get-NormalizedPath $_.RecoveredPath).Equals($approvedPath, [StringComparison]::OrdinalIgnoreCase)
-            }
-        )
-        if ($pathPrimaryRows.Count -eq 0) {
+        $pathKey = (Get-NormalizedPath $approvedPath).ToUpperInvariant()
+        if (-not $preflightPrimaryByRecoveredPath.ContainsKey($pathKey)) {
             $missingRequestedPathCount++
-        }
-        elseif ($pathPrimaryRows.Count -gt 1) {
-            $ambiguousRequestedPathCount++
         }
     }
     Write-Host ''
@@ -1263,6 +1442,69 @@ elseif ($PSBoundParameters.ContainsKey('OnlyRecoveredPathList')) {
         Write-Host "  DestinationPath:   $($row.PlannedDestinationPath)"
         Write-Host "  PreflightStatus:   $($row.PreflightStatus)"
         Write-Host "  CollisionSuffix:   $($row.CollisionSuffix)"
+        Write-Host ''
+    }
+}
+elseif ($PSBoundParameters.ContainsKey('ApprovedBatchPlan')) {
+    $missingRequestedPathCount = 0
+    $ambiguousRequestedPathCount = 0
+    $blockedSelectedCount = 0
+    foreach ($approvedPath in $approvedSelectionNormalized) {
+        $pathKey = (Get-NormalizedPath $approvedPath).ToUpperInvariant()
+        if (-not $preflightPrimaryByRecoveredPath.ContainsKey($pathKey)) {
+            $missingRequestedPathCount++
+        }
+        elseif ($preflightPrimaryByRecoveredPath[$pathKey].PreflightStatus -notin @('DryRunReady', 'CollisionRenamed')) {
+            $blockedSelectedCount++
+        }
+    }
+    $subfolderGroups = $selectedCandidates | Group-Object DestinationSubfolder | Sort-Object Name
+    Write-Host ''
+    Write-Host '=== -ApprovedBatchPlan Selection Summary ==='
+    Write-Host "PlanFile:                     $approvedBatchPlanFile"
+    Write-Host "PlanSha256:                   $approvedBatchPlanFileHash"
+    if ($PSBoundParameters.ContainsKey('ExpectedApprovedBatchPlanHash')) {
+        Write-Host "ExpectedApprovedBatchPlanHash: $(Get-NormalizedHash $ExpectedApprovedBatchPlanHash) (verified)"
+    }
+    Write-Host "RequestedPathCount:           $($approvedSelectionNormalized.Count)"
+    Write-Host "RawPathRowCount:              $approvedBatchPlanRawPathCount"
+    Write-Host "DuplicatePathRowCount:        $approvedBatchPlanDuplicatePathCount"
+    Write-Host "SelectedPrimaryCount:         $($selectedCandidates.Count)"
+    Write-Host "MissingRequestedPathCount:    $missingRequestedPathCount"
+    Write-Host "AmbiguousRequestedPathCount:  $ambiguousRequestedPathCount"
+    Write-Host "BlockedSelectedCount:         $blockedSelectedCount"
+    Write-Host 'DestinationSubfolder counts:'
+    foreach ($g in $subfolderGroups) {
+        Write-Host ("  {0,-40} {1}" -f $g.Name, $g.Count)
+    }
+    Write-LogLine -Path $logReport -Message 'APPROVEDBATCHPLAN_SELECTED'
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_File=$approvedBatchPlanFile"
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_FileSha256=$approvedBatchPlanFileHash"
+    if ($PSBoundParameters.ContainsKey('ExpectedApprovedBatchPlanHash')) {
+        Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_ExpectedSha256=$(Get-NormalizedHash $ExpectedApprovedBatchPlanHash)"
+    }
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_RequestedPathCount=$($approvedSelectionNormalized.Count)"
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_RawPathRowCount=$approvedBatchPlanRawPathCount"
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_DuplicatePathRowCount=$approvedBatchPlanDuplicatePathCount"
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_SelectedPrimaryCount=$($selectedCandidates.Count)"
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_MissingRequestedPathCount=$missingRequestedPathCount"
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_AmbiguousRequestedPathCount=$ambiguousRequestedPathCount"
+    Write-LogLine -Path $logReport -Message "ApprovedBatchPlan_BlockedSelectedCount=$blockedSelectedCount"
+    foreach ($g in $subfolderGroups) {
+        Write-LogLine -Path $logReport -Message ("ApprovedBatchPlan_Subfolder {0}={1}" -f $g.Name, $g.Count)
+    }
+    Write-Host ''
+    Write-Host 'First selected candidates (up to 20):'
+    $previewRows = @($selectedCandidates | Select-Object -First 20)
+    foreach ($row in $previewRows) {
+        Write-Host "  RecoveredPath:        $($row.RecoveredPath)"
+        Write-Host "  DestinationSubfolder: $($row.DestinationSubfolder)"
+        Write-Host "  RealNamedPath:        $($row.RealNamedPath)"
+        Write-Host "  Hash:                 $($row.Hash)"
+        Write-Host "  SizeBytes:            $($row.SizeBytes)"
+        Write-Host "  DestinationPath:      $($row.PlannedDestinationPath)"
+        Write-Host "  PreflightStatus:      $($row.PreflightStatus)"
+        Write-Host "  CollisionSuffix:      $($row.CollisionSuffix)"
         Write-Host ''
     }
 }

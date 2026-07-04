@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.6. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.6 list-hash and batch-gate review and Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.7. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.7 routed batch plan review and Jim approval.
 
-**Version:** v0.1.6 (`-OnlyRecoveredPathList` + `-ExpectedPathListHash`; all-or-nothing batch Execute gate; `-Execute` still not approved)
+**Version:** v0.1.7 (`-ApprovedBatchPlan` routed batch targeting; `-Execute` still not approved)
 
 **Date:** 2026-07-03
 
@@ -421,10 +421,11 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
-**Resolved in v0.1.6:**
+**Resolved in v0.1.7:**
 
-- `-ExpectedPathListHash` binds approved list file contents via SHA-256 (required for list + `-Execute`).
-- All-or-nothing batch Execute gate: every requested path must reach `DryRunReady` or `CollisionRenamed` before any `Move-Item`.
+- `-ApprovedBatchPlan` routed batch CSV with per-path `DestinationSubfolder`.
+- `-ExpectedApprovedBatchPlanHash` binds plan file contents via SHA-256 (required for plan + `-Execute`).
+- All-or-nothing batch Execute gate extended to routed batch plans.
 
 **Resolved in v0.1.4:**
 
