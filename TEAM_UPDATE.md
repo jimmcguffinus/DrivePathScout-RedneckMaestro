@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 GIF medium-review move; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
+**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.4 CSV + v0.2.3 GIF medium-review move; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
 
-Delete-review HIGH lane Execute `20260703-221211` completed (1,331 verified). **GIF medium-review Execute `20260703` completed (28 verified)** → `05_DELETE_REVIEW\medium_review\gif`. MOVE-only; no hard delete, no copy, no keeper movement. Remaining staged lanes: CSV (24), PST (66, HOLD), PNG/Suns leftovers.
+Delete-review HIGH lane Execute `20260703-221211` (1,331 verified). GIF Execute `20260703` (28 verified). **CSV DryRun ready** (24 files, plan hash `846F6975…`). CSV `-Execute` blocked pending Jim approval. PST (66) HOLD.
 
 ## 3. Hash Scout built
 

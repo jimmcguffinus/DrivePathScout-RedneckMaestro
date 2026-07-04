@@ -2,7 +2,7 @@
 
 **Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8, `Remove-StagedDuplicateCandidates.ps1` v0.2.0 (parked final-delete tool), and `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2. Routed move Execute completed for batch `20260703-221211`. **Delete-review move DryRun only** — Execute blocked pending Codex re-review and Jim approval. **No hard delete.**
 
-**Version:** v0.2.3 GIF medium-review move planner + v0.2.2 HIGH delete-review move (MOVE-only into `05_DELETE_REVIEW`; full execute preflight; `-Execute` requires Jim approval per plan hash)
+**Version:** v0.2.4 CSV medium-review move planner + v0.2.3 GIF + v0.2.2 HIGH delete-review move (MOVE-only into `05_DELETE_REVIEW`; full execute preflight; `-Execute` requires Jim approval per plan hash)
 
 **Date:** 2026-07-03
 
@@ -421,6 +421,12 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.4:**
+
+- `Move-StagedWorkbenchLaneToReview.ps1` — added `CsvMedium` lane profile (`data\csv` → `medium_review\csv`).
+- `New-ApprovedCsvReviewMovePlan.ps1` — builds `approved_csv_delete_review_move_plan_<stamp>.csv` from staged duplicate inventory.
+- `GifMedium` profile unchanged; lane config selected via `Initialize-LaneProfile`.
+
 **Resolved in v0.2.3:**
 
 - `Move-StagedWorkbenchLaneToReview.ps1` — generalized workbench lane review MOVE planner (GIF medium-review pilot).
@@ -502,7 +508,8 @@ Do **not** implement or use:
 | Pilot authorization | **Consumed** — applied to that one source path only |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
 | `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move DryRun + execute preflight hardening | Done |
-| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 GIF medium-review move DryRun | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.4 CSV medium-review move DryRun | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 GIF medium-review move Execute | Done |
 | `Remove-StagedDuplicateCandidates.ps1` v0.2.0 final-delete tool | **Parked** — not for routine cleanup |
 | Delete-review move Execute | **Not authorized** |
 | Delete Execute (`Remove-StagedDuplicateCandidates.ps1 -Execute`) | **Not authorized** |

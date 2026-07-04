@@ -20,15 +20,16 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$RunStamp,
 
-    [ValidateSet('GifMedium')]
+    [ValidateSet('GifMedium', 'CsvMedium')]
     [string]$LaneProfile = 'GifMedium',
 
     [switch]$Execute
 )
 
-# Workbench Lane Review Move Planner v0.2.3
+# Workbench Lane Review Move Planner v0.2.4
 # MOVE staged duplicate files from an approved workbench lane into 05_DELETE_REVIEW. Default is DryRun.
 # LaneProfile GifMedium: 04_DUPLICATES_STAGED\...\images\gif -> 05_DELETE_REVIEW\medium_review\gif
+# LaneProfile CsvMedium:  04_DUPLICATES_STAGED\...\data\csv   -> 05_DELETE_REVIEW\medium_review\csv
 # Full execute preflight eliminates predictable per-row blockers before the first Move-Item.
 # Not transactionally atomic after external I/O failure; manifest-based recovery may be required.
 # No Remove-Item. No Copy-Item. No Rename-Item. Never moves keeper files or I:\recover / I:\1tbrecover sources.
@@ -36,23 +37,41 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-$script:StagedDuplicatesRoot = 'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname'
-$script:ApprovedStagedSourceRoots = @(
-    'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\images\gif'
-)
-$script:ApprovedSourceSubfolders = @(
-    'images\gif'
-)
-$script:ReviewLaneBySourceSubfolder = @{
-    'images\gif' = 'medium_review\gif'
+function Initialize-LaneProfile {
+    param([Parameter(Mandatory = $true)][string]$Profile)
+    $script:StagedDuplicatesRoot = 'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname'
+    $script:RequiredReviewConfidence = 'MEDIUM'
+    $script:DeniedMoveSourcePrefixes = @('I:\recover\', 'I:\1tbrecover\')
+    $script:VerifiedMoveStatuses = @('MovedVerified')
+    $script:BatchExecuteReadyStatuses = @('DryRunReady', 'CollisionRenamed')
+    switch ($Profile) {
+        'GifMedium' {
+            $script:ApprovedStagedSourceRoots = @(
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\images\gif'
+            )
+            $script:ApprovedSourceSubfolders = @('images\gif')
+            $script:ReviewLaneBySourceSubfolder = @{ 'images\gif' = 'medium_review\gif' }
+            $script:RequiredFileExtension = '.gif'
+            $script:DeniedSourceSubfolderPatterns = @('mail\pst', 'data\csv', 'images\png')
+            $script:ReportNamePrefix = 'gif_delete_review_move'
+        }
+        'CsvMedium' {
+            $script:ApprovedStagedSourceRoots = @(
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\data\csv'
+            )
+            $script:ApprovedSourceSubfolders = @('data\csv')
+            $script:ReviewLaneBySourceSubfolder = @{ 'data\csv' = 'medium_review\csv' }
+            $script:RequiredFileExtension = '.csv'
+            $script:DeniedSourceSubfolderPatterns = @('mail\pst', 'images\gif', 'images\png')
+            $script:ReportNamePrefix = 'csv_delete_review_move'
+        }
+        default {
+            throw "Unsupported LaneProfile: $Profile"
+        }
+    }
 }
-$script:RequiredReviewConfidence = 'MEDIUM'
-$script:RequiredFileExtension = '.gif'
-$script:DeniedSourceSubfolderPatterns = @('mail\pst', 'data\csv', 'images\png')
-$script:ReportNamePrefix = 'gif_delete_review_move'
-$script:DeniedMoveSourcePrefixes = @('I:\recover\', 'I:\1tbrecover\')
-$script:VerifiedMoveStatuses = @('MovedVerified')
-$script:BatchExecuteReadyStatuses = @('DryRunReady', 'CollisionRenamed')
+
+Initialize-LaneProfile -Profile $LaneProfile
 
 function Get-NormalizedPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -801,7 +820,7 @@ $inventoryData = Get-InventoryIndex -Path $InventoryCsvPath
 $planReadResult = Read-ApprovedReviewMovePlan -PlanPath $ApprovedReviewMovePlan -DeleteReviewRoot $deleteReviewRootNormalized
 $planEntries = $planReadResult.Entries
 
-Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.3 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
+Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.4 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
 Write-LogLine -Path $logReport -Message "InventoryCsvPath=$InventoryCsvPath"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan=$ApprovedReviewMovePlan"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan_FileSha256=$planFileHash"

@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 GIF medium-review move; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
+- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.4 CSV + v0.2.3 GIF medium-review move; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
 
 **Meaning:**
 
@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** GIF medium-review move Execute `20260703` completed and verified (28 files → `05_DELETE_REVIEW\medium_review\gif`). Remaining staged lanes: **CSV** (24), **PST** (66, HOLD), plus scattered PNG/Suns leftovers. No hard delete. Next lane planning requires new approved plan + Jim approval per operation.
+**Safe next step:** CSV medium-review move DryRun ready (`approved_csv_delete_review_move_plan_20260704.csv`, 24 files → `medium_review\csv`). GIF Execute `20260703` verified (28 files). **Do not run CSV `-Execute` without Jim approval of exact plan hash.** PST lane (66 files) remains HOLD.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 

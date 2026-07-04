@@ -70,19 +70,28 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 
 `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files. v0.2.2 adds full execute preflight before any `Move-Item` and mandatory inventory coupling (fail-closed; not transactionally atomic after external I/O failure).
 
-`Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 extends the same safety model for additional workbench lanes. **GIF medium-review** moves staged GIF duplicates from `04_DUPLICATES_STAGED\...\images\gif` into `05_DELETE_REVIEW\medium_review\gif`. Execute batch `20260703` moved **28** files (MovedVerified=28, MoveFailed=0). Build plans with `New-ApprovedGifReviewMovePlan.ps1`:
+`Move-StagedWorkbenchLaneToReview.ps1` v0.2.4 extends the lane mover with **`CsvMedium`** and **`GifMedium`** profiles. MOVE-only grouping into `05_DELETE_REVIEW` for human review — not hard delete.
+
+| Lane | Source | Destination | Status |
+|------|--------|-------------|--------|
+| GIF | `...\images\gif` | `medium_review\gif` | Execute `20260703` verified (28) |
+| CSV | `...\data\csv` | `medium_review\csv` | DryRun ready (24) |
+
+Build plans:
 
 ```powershell
 .\New-ApprovedGifReviewMovePlan.ps1
+.\New-ApprovedCsvReviewMovePlan.ps1
 
+# CSV DryRun example
 .\Move-StagedWorkbenchLaneToReview.ps1 `
   -InventoryCsvPath "C:\Users\jim\Desktop\DrivePathInventory\staged_duplicate_inventory_20260703-221211.csv" `
-  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_gif_delete_review_move_plan_20260703.csv" `
+  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_csv_delete_review_move_plan_20260704.csv" `
   -ExpectedApprovedReviewMovePlanHash "<sha256>" `
-  -LaneProfile GifMedium
+  -LaneProfile CsvMedium
 ```
 
-MOVE-only grouping for human review — not hard delete. Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. Remaining staged lanes: CSV, PST (hold), PNG/Suns leftovers.
+Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. PST lane (66 files) remains HOLD.
 
 ## Parked final-delete tool
 
