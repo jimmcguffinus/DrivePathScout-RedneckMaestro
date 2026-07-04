@@ -68,7 +68,7 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 
 ## Staged duplicate delete-review move planner
 
-`Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files.
+`Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files. v0.2.2 adds full execute preflight before any `Move-Item` and mandatory inventory coupling (fail-closed; not transactionally atomic after external I/O failure).
 
 ```powershell
 .\Move-StagedDuplicatesToDeleteReview.ps1 `

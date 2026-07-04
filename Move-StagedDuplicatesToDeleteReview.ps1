@@ -23,8 +23,10 @@ param(
     [switch]$Execute
 )
 
-# Delete Review Move Planner v0.2.1
+# Delete Review Move Planner v0.2.2
 # MOVE staged duplicate files into 05_DELETE_REVIEW when -Execute is passed. Default is DryRun.
+# Full execute preflight eliminates predictable per-row blockers before the first Move-Item.
+# Not transactionally atomic after external I/O failure; manifest-based recovery may be required.
 # No Remove-Item. No Copy-Item. No Rename-Item. Never moves keeper files or I:\recover / I:\1tbrecover sources.
 
 Set-StrictMode -Version 2.0
@@ -128,6 +130,106 @@ function Test-SafeLiteralMovePath {
         throw "Move path must not contain '..': $Path"
     }
     return Get-NormalizedPath $Path
+}
+
+function Get-PathChainComponents {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $normalized = Get-NormalizedPath $Path
+    if ([string]::IsNullOrWhiteSpace($normalized)) { return @() }
+
+    $root = [IO.Path]::GetPathRoot($normalized)
+    if (-not $root.EndsWith([IO.Path]::DirectorySeparatorChar)) {
+        $root = $root + [IO.Path]::DirectorySeparatorChar
+    }
+    $relative = $normalized.Substring($root.Length).TrimStart([char[]]'\/')
+
+    $chain = New-Object System.Collections.Generic.List[string]
+    [void]$chain.Add($root)
+
+    if (-not [string]::IsNullOrWhiteSpace($relative)) {
+        $current = $root
+        foreach ($part in ($relative -split '\\')) {
+            if ([string]::IsNullOrWhiteSpace($part)) { continue }
+            $current = Join-Path $current $part
+            [void]$chain.Add($current)
+        }
+    }
+
+    return @($chain)
+}
+
+function Test-ReparsePathChain {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][ValidateSet('Source', 'Destination')][string]$Mode
+    )
+    $checkFailedStatus = if ($Mode -eq 'Source') { 'SourceReparseCheckFailed' } else { 'DestinationReparseCheckFailed' }
+    $reparseStatus = if ($Mode -eq 'Source') { 'SourceReparsePoint' } else { 'DestinationReparsePoint' }
+
+    $normalized = Get-NormalizedPath $Path
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return [pscustomobject]@{
+            Safe          = $false
+            Status        = $checkFailedStatus
+            Message       = 'Path is empty; reparse chain check cannot complete.'
+            ComponentPath = ''
+        }
+    }
+
+    $chain = @(Get-PathChainComponents -Path $normalized)
+    if ($chain.Count -eq 0) {
+        return [pscustomobject]@{
+            Safe          = $false
+            Status        = $checkFailedStatus
+            Message       = 'Unable to build path chain for reparse inspection.'
+            ComponentPath = ''
+        }
+    }
+
+    if ($Mode -eq 'Destination' -and $chain.Count -gt 1) {
+        $chain = $chain[0..($chain.Count - 2)]
+    }
+
+    foreach ($component in $chain) {
+        if (-not (Test-Path -LiteralPath $component)) {
+            if ($Mode -eq 'Source') {
+                return [pscustomobject]@{
+                    Safe          = $false
+                    Status        = $checkFailedStatus
+                    Message       = "Source path component missing during reparse inspection: $component"
+                    ComponentPath = $component
+                }
+            }
+            continue
+        }
+
+        try {
+            $item = Get-Item -LiteralPath $component -Force -ErrorAction Stop
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                return [pscustomobject]@{
+                    Safe          = $false
+                    Status        = $reparseStatus
+                    Message       = "Reparse point detected at $component"
+                    ComponentPath = $component
+                }
+            }
+        }
+        catch {
+            return [pscustomobject]@{
+                Safe          = $false
+                Status        = $checkFailedStatus
+                Message       = "Reparse inspection failed at ${component}: $($_.Exception.Message)"
+                ComponentPath = $component
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Safe          = $true
+        Status        = $null
+        Message       = $null
+        ComponentPath = $null
+    }
 }
 
 function Get-ExpectedDeleteReviewDirectory {
@@ -306,16 +408,67 @@ function Get-InventoryIndex {
         throw "Inventory CSV contains no rows: $Path"
     }
     $index = @{}
+    $duplicatePaths = New-Object System.Collections.Generic.List[string]
     foreach ($row in $rows) {
         $key = (Get-NormalizedPath $row.StagedDuplicatePath).ToUpperInvariant()
-        if (-not [string]::IsNullOrWhiteSpace($key)) {
+        if ([string]::IsNullOrWhiteSpace($key)) { continue }
+        if ($index.ContainsKey($key)) {
+            [void]$duplicatePaths.Add($row.StagedDuplicatePath)
+        }
+        else {
             $index[$key] = $row
         }
+    }
+    if ($duplicatePaths.Count -gt 0) {
+        throw "Inventory CSV contains duplicate normalized StagedDuplicatePath entries (fail closed): $($duplicatePaths -join '; ')"
     }
     return [pscustomobject]@{
         Rows  = $rows
         Index = $index
     }
+}
+
+function Get-PlanInventoryCouplingIssues {
+    param(
+        [Parameter(Mandatory = $true)]$PlanRow,
+        $InventoryRow
+    )
+    $issues = New-Object System.Collections.Generic.List[string]
+    if ($null -eq $InventoryRow) {
+        [void]$issues.Add('InventoryRowMissing')
+        return @($issues)
+    }
+    if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
+        [void]$issues.Add('InventoryHashMismatch')
+    }
+    if ([int64]$InventoryRow.SizeBytes -ne [int64]$PlanRow.SizeBytes) {
+        [void]$issues.Add('InventorySizeMismatch')
+    }
+    if ((Get-NormalizedPath $InventoryRow.KeeperPath) -ne $PlanRow.KeeperPath) {
+        [void]$issues.Add('InventoryKeeperMismatch')
+    }
+    if ($InventoryRow.DestinationSubfolder.Trim() -ne $PlanRow.DestinationSubfolder) {
+        [void]$issues.Add('InventorySubfolderMismatch')
+    }
+    if ($InventoryRow.DeleteConfidence.Trim().ToUpperInvariant() -ne 'HIGH') {
+        [void]$issues.Add('InventoryNotHighConfidence')
+    }
+    if ($InventoryRow.DestinationHashMatches -ne 'True') {
+        [void]$issues.Add('InventoryDestinationHashMismatch')
+    }
+    if ($InventoryRow.KeeperHashMatches -ne 'True') {
+        [void]$issues.Add('InventoryKeeperHashMismatch')
+    }
+    if ($InventoryRow.DestinationExists -ne 'True') {
+        [void]$issues.Add('InventoryDestinationMissing')
+    }
+    if ($InventoryRow.KeeperExists -ne 'True') {
+        [void]$issues.Add('InventoryKeeperMissing')
+    }
+    if ($InventoryRow.SourceGone -ne 'True') {
+        [void]$issues.Add('InventorySourceNotGone')
+    }
+    return @($issues)
 }
 
 function Test-InventoryRowEligible {
@@ -336,19 +489,17 @@ function Test-ReviewMoveCandidateLive {
     param(
         [Parameter(Mandatory = $true)]$PlanRow,
         [Parameter(Mandatory = $true)][string]$DeleteReviewRoot,
-        $InventoryRow
+        [Parameter(Mandatory = $true)]$InventoryRow
     )
     $issues = New-Object System.Collections.Generic.List[string]
     $stagedPath = $PlanRow.StagedDuplicatePath
     $keeperPath = $PlanRow.KeeperPath
 
-    if ($null -ne $InventoryRow) {
-        if (-not (Test-InventoryRowEligible -Row $InventoryRow)) {
-            [void]$issues.Add('InventoryRowNotEligible')
-        }
-        if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
-            [void]$issues.Add('InventoryHashMismatch')
-        }
+    foreach ($couplingIssue in (Get-PlanInventoryCouplingIssues -PlanRow $PlanRow -InventoryRow $InventoryRow)) {
+        [void]$issues.Add($couplingIssue)
+    }
+    if ($null -ne $InventoryRow -and -not (Test-InventoryRowEligible -Row $InventoryRow)) {
+        [void]$issues.Add('InventoryRowNotEligible')
     }
 
     if (-not (Test-StagedPathInApprovedSourceRoot -Path $stagedPath)) {
@@ -368,6 +519,22 @@ function Test-ReviewMoveCandidateLive {
     }
     if (-not (Test-PathInsideRoot -ChildPath $PlanRow.DeleteReviewPath -RootPath $DeleteReviewRoot)) {
         [void]$issues.Add('DeleteReviewOutsideRoot')
+    }
+
+    $sourceReparse = Test-ReparsePathChain -Path $stagedPath -Mode Source
+    if (-not $sourceReparse.Safe) {
+        [void]$issues.Add($sourceReparse.Status)
+    }
+    $reviewRootReparse = Test-ReparsePathChain -Path $DeleteReviewRoot -Mode Destination
+    if (-not $reviewRootReparse.Safe) {
+        [void]$issues.Add($reviewRootReparse.Status)
+    }
+    $destParentForReparse = Split-Path -Parent $PlanRow.DeleteReviewPath
+    if (-not [string]::IsNullOrWhiteSpace($destParentForReparse)) {
+        $destReparse = Test-ReparsePathChain -Path $destParentForReparse -Mode Destination
+        if (-not $destReparse.Safe) {
+            [void]$issues.Add($destReparse.Status)
+        }
     }
 
     if (-not (Test-Path -LiteralPath $stagedPath)) {
@@ -411,15 +578,109 @@ function Test-ReviewMoveCandidateLive {
         [void]$issues.Add('CrossVolumeRejected')
     }
 
-    if ($null -ne $InventoryRow -and $InventoryRow.SourceGone -ne 'True') {
-        [void]$issues.Add('SourceNotGone')
-    }
-
     $ready = ($issues.Count -eq 0)
     return [pscustomobject]@{
         Ready   = $ready
         Status  = if ($ready) { 'DryRunReady' } else { ($issues -join ';') }
         Message = if ($ready) { 'Ready for delete review move.' } else { ($issues -join '; ') }
+        Issues  = @($issues)
+    }
+}
+
+function Test-ExecutePreflightRow {
+    param(
+        [Parameter(Mandatory = $true)]$PreflightRow,
+        [Parameter(Mandatory = $true)][string]$DeleteReviewRoot,
+        [Parameter(Mandatory = $true)]$InventoryRow
+    )
+    $issues = New-Object System.Collections.Generic.List[string]
+    $stagedPath = $PreflightRow.StagedDuplicatePath
+    $keeperPath = $PreflightRow.KeeperPath
+    $plannedDest = $PreflightRow.PlannedDeleteReviewPath
+
+    foreach ($couplingIssue in (Get-PlanInventoryCouplingIssues -PlanRow $PreflightRow -InventoryRow $InventoryRow)) {
+        [void]$issues.Add($couplingIssue)
+    }
+
+    if (-not (Test-PathInsideRoot -ChildPath $stagedPath -RootPath $script:StagedDuplicatesRoot)) {
+        [void]$issues.Add('OutsideStagedDuplicatesRoot')
+    }
+    if (-not (Test-StagedPathInApprovedSourceRoot -Path $stagedPath)) {
+        [void]$issues.Add('OutsideApprovedStagedRoot')
+    }
+    if (Test-PathUnderDeniedPrefix -Path $stagedPath) {
+        [void]$issues.Add('DeniedPrefixStaged')
+    }
+    if (-not (Test-PathInsideRoot -ChildPath $plannedDest -RootPath $DeleteReviewRoot)) {
+        [void]$issues.Add('DeleteReviewOutsideRoot')
+    }
+
+    $sourceReparse = Test-ReparsePathChain -Path $stagedPath -Mode Source
+    if (-not $sourceReparse.Safe) { [void]$issues.Add($sourceReparse.Status) }
+    $reviewRootReparse = Test-ReparsePathChain -Path $DeleteReviewRoot -Mode Destination
+    if (-not $reviewRootReparse.Safe) { [void]$issues.Add($reviewRootReparse.Status) }
+
+    $destParent = Split-Path -Parent $plannedDest
+    if ([string]::IsNullOrWhiteSpace($destParent)) {
+        [void]$issues.Add('DestinationParentMissing')
+    }
+    else {
+        if (-not (Test-PathInsideRoot -ChildPath $destParent -RootPath $DeleteReviewRoot)) {
+            [void]$issues.Add('DestinationParentOutsideRoot')
+        }
+        $destReparse = Test-ReparsePathChain -Path $destParent -Mode Destination
+        if (-not $destReparse.Safe) { [void]$issues.Add($destReparse.Status) }
+        if (Test-Path -LiteralPath $destParent) {
+            if (-not (Test-Path -LiteralPath $destParent -PathType Container)) {
+                [void]$issues.Add('DestinationParentNotDirectory')
+            }
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $stagedPath)) {
+        [void]$issues.Add('StagedMissing')
+    }
+    elseif (Test-Path -LiteralPath $stagedPath -PathType Container) {
+        [void]$issues.Add('StagedIsDirectory')
+    }
+    else {
+        try {
+            $liveHash = Get-NormalizedHash (Get-FileHash -LiteralPath $stagedPath -Algorithm SHA256).Hash
+            if ($liveHash -ne $PreflightRow.Hash) { [void]$issues.Add('StagedHashMismatch') }
+            $liveSize = (Get-Item -LiteralPath $stagedPath -Force).Length
+            if ([int64]$liveSize -ne [int64]$PreflightRow.SizeBytes) { [void]$issues.Add('StagedSizeMismatch') }
+        }
+        catch {
+            [void]$issues.Add('StagedHashCheckFailed')
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $keeperPath)) {
+        [void]$issues.Add('KeeperMissing')
+    }
+    else {
+        try {
+            $keeperHash = Get-NormalizedHash (Get-FileHash -LiteralPath $keeperPath -Algorithm SHA256).Hash
+            if ($keeperHash -ne $PreflightRow.Hash) { [void]$issues.Add('KeeperHashMismatch') }
+        }
+        catch {
+            [void]$issues.Add('KeeperHashCheckFailed')
+        }
+    }
+
+    if (Test-Path -LiteralPath $plannedDest) {
+        [void]$issues.Add('DestinationCollisionNotPreplanned')
+    }
+
+    if (-not (Test-SameVolume -PathA $stagedPath -PathB $plannedDest)) {
+        [void]$issues.Add('CrossVolumeRejected')
+    }
+
+    $ready = ($issues.Count -eq 0)
+    return [pscustomobject]@{
+        Ready   = $ready
+        Status  = if ($ready) { 'ExecutePreflightReady' } else { ($issues -join ';') }
+        Message = if ($ready) { 'Execute preflight passed for row.' } else { ($issues -join '; ') }
         Issues  = @($issues)
     }
 }
@@ -502,12 +763,13 @@ $preflightReport = Join-Path $reportRootNormalized "delete_review_move_preflight
 $logReport = Join-Path $reportRootNormalized "delete_review_move_log_$RunStamp.txt"
 $executionJournal = Join-Path $reportRootNormalized "delete_review_move_journal_$RunStamp.csv"
 $executionManifest = Join-Path $reportRootNormalized "delete_review_move_manifest_$RunStamp.csv"
+$executePreflightFailedReport = Join-Path $reportRootNormalized "delete_review_move_execute_preflight_failed_$RunStamp.csv"
 
 $inventoryData = Get-InventoryIndex -Path $InventoryCsvPath
 $planReadResult = Read-ApprovedReviewMovePlan -PlanPath $ApprovedReviewMovePlan -DeleteReviewRoot $deleteReviewRootNormalized
 $planEntries = $planReadResult.Entries
 
-Write-LogLine -Path $logReport -Message "START Move-StagedDuplicatesToDeleteReview v0.2.1 mode=$runMode stamp=$RunStamp"
+Write-LogLine -Path $logReport -Message "START Move-StagedDuplicatesToDeleteReview v0.2.2 mode=$runMode stamp=$RunStamp"
 Write-LogLine -Path $logReport -Message "InventoryCsvPath=$InventoryCsvPath"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan=$ApprovedReviewMovePlan"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan_FileSha256=$planFileHash"
@@ -622,12 +884,59 @@ if ($Execute) {
     Write-LogLine -Path $logReport -Message 'BATCH_VALIDATION_PASSED'
     Write-LogLine -Path $logReport -Message "BatchValidationPassed_ReadyCount=$readyCount"
 
+    $executeReadyRows = @($preflightRows | Where-Object { $_.PreflightStatus -in $script:BatchExecuteReadyStatuses })
+    $executePreflightOffenders = New-Object System.Collections.Generic.List[object]
+    foreach ($item in $executeReadyRows) {
+        $invKey = $item.StagedDuplicatePath.ToUpperInvariant()
+        $inventoryRow = $null
+        if ($inventoryData.Index.ContainsKey($invKey)) {
+            $inventoryRow = $inventoryData.Index[$invKey]
+        }
+        $ep = Test-ExecutePreflightRow -PreflightRow $item -DeleteReviewRoot $deleteReviewRootNormalized -InventoryRow $inventoryRow
+        if (-not $ep.Ready) {
+            [void]$executePreflightOffenders.Add([pscustomobject]@{
+                PreflightId             = $item.PreflightId
+                StagedDuplicatePath     = $item.StagedDuplicatePath
+                PlannedDeleteReviewPath = $item.PlannedDeleteReviewPath
+                KeeperPath              = $item.KeeperPath
+                Hash                    = $item.Hash
+                PreflightStatus         = $item.PreflightStatus
+                ExecutePreflightStatus  = $ep.Status
+                ExecutePreflightMessage = $ep.Message
+                Issues                  = ($ep.Issues -join ';')
+            })
+        }
+    }
+
+    if ($executePreflightOffenders.Count -gt 0) {
+        Write-Host ''
+        Write-Host '=== ExecutePreflightFailed ==='
+        Write-Host 'Execute preflight failed before any Move-Item. No predictable per-row blockers were cleared. No files were moved.'
+        Write-Host 'This gate is fail-closed; movement is not transactionally atomic after external I/O failure.'
+        Write-LogLine -Path $logReport -Message 'EXECUTE_PREFLIGHT_FAILED'
+        $executePreflightOffenders | Export-Csv -LiteralPath $executePreflightFailedReport -NoTypeInformation -Encoding UTF8
+        foreach ($offender in $executePreflightOffenders) {
+            Write-Host "  StagedDuplicatePath: $($offender.StagedDuplicatePath)"
+            Write-Host "  Status:              $($offender.ExecutePreflightStatus)"
+            Write-Host "  Message:             $($offender.ExecutePreflightMessage)"
+            Write-LogLine -Path $logReport -Message ("ExecutePreflightFailed_Offender Path={0} Status={1} Message={2}" -f $offender.StagedDuplicatePath, $offender.ExecutePreflightStatus, $offender.ExecutePreflightMessage)
+        }
+        Write-Host "ExecutePreflightFailedReport=$executePreflightFailedReport"
+        throw 'Execute preflight failed: one or more rows have predictable blockers. No files were moved.'
+    }
+
+    Write-LogLine -Path $logReport -Message 'EXECUTE_PREFLIGHT_PASSED'
+    Write-LogLine -Path $logReport -Message "ExecutePreflightPassed_ReadyCount=$($executeReadyRows.Count)"
+    Write-Host ''
+    Write-Host '=== ExecutePreflightPassed ==='
+    Write-Host 'No predictable per-row blockers before first Move-Item. Movement is not transactionally atomic after external I/O failure.'
+
     $movedCount = 0
     $failedCount = 0
     $journalSequence = 0
     $manifestRows = New-Object System.Collections.Generic.List[object]
 
-    foreach ($item in ($preflightRows | Where-Object { $_.PreflightStatus -in $script:BatchExecuteReadyStatuses })) {
+    foreach ($item in $executeReadyRows) {
         $executionStatus = 'MoveFailed'
         $errorMessage = ''
         $stagedHashBefore = ''

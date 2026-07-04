@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8, `Remove-StagedDuplicateCandidates.ps1` v0.2.0 (parked final-delete tool), and `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1. Routed move Execute completed for batch `20260703-221211`. **Delete-review move DryRun only** — Execute blocked pending Codex review and Jim approval. **No hard delete.**
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8, `Remove-StagedDuplicateCandidates.ps1` v0.2.0 (parked final-delete tool), and `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2. Routed move Execute completed for batch `20260703-221211`. **Delete-review move DryRun only** — Execute blocked pending Codex re-review and Jim approval. **No hard delete.**
 
-**Version:** v0.2.1 delete-review move planner (MOVE-only into `05_DELETE_REVIEW`; `-Execute` not approved)
+**Version:** v0.2.2 delete-review move Execute hardening (MOVE-only into `05_DELETE_REVIEW`; full execute preflight before any `Move-Item`; `-Execute` not approved)
 
 **Date:** 2026-07-03
 
@@ -421,6 +421,12 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.2:**
+
+- `Move-StagedDuplicatesToDeleteReview.ps1` — execute hardening: full **execute preflight** over every batch-ready row before any `Move-Item`. Fail-closed for predictable per-row blockers; writes `delete_review_move_execute_preflight_failed_<stamp>.csv` on failure. Movement is **not transactionally atomic** after external I/O failure; manifest-based recovery may be required.
+- Mandatory inventory coupling: every approved plan row must exist **exactly once** in inventory with matching Hash, SizeBytes, KeeperPath, DestinationSubfolder, DeleteConfidence=HIGH, DestinationHashMatches, KeeperHashMatches, DestinationExists, KeeperExists, SourceGone=True. Duplicate inventory staged paths throw at load. No live-only fallback.
+- Reparse path-chain checks on staged source, destination parent, and `DeleteReviewRoot` (pattern from `Move-RecoveredToRealnameMatches.ps1`).
+
 **Resolved in v0.2.1:**
 
 - `Move-StagedDuplicatesToDeleteReview.ps1` — MOVE-only planner for HIGH-confidence staged duplicates into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\`.
@@ -489,7 +495,7 @@ Do **not** implement or use:
 | One-file exact-target pilot | **Passed** — one Suns PNG moved and verified on 2026-07-03 |
 | Pilot authorization | **Consumed** — applied to that one source path only |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
-| `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1 delete-review move DryRun | Done |
+| `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move DryRun + execute preflight hardening | Done |
 | `Remove-StagedDuplicateCandidates.ps1` v0.2.0 final-delete tool | **Parked** — not for routine cleanup |
 | Delete-review move Execute | **Not authorized** |
 | Delete Execute (`Remove-StagedDuplicateCandidates.ps1 -Execute`) | **Not authorized** |
