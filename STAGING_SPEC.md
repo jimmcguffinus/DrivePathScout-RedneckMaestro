@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.7. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.7 routed batch plan review and Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.8 routing safety re-review and Jim approval.
 
-**Version:** v0.1.7 (`-ApprovedBatchPlan` routed batch targeting; `-Execute` still not approved)
+**Version:** v0.1.8 (routed destination validation hardening; `-Execute` still not approved)
 
 **Date:** 2026-07-03
 
@@ -420,6 +420,12 @@ Do **not** implement or use:
 
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
+
+**Resolved in v0.1.8:**
+
+- `DestinationSubfolder` validation splits path segments and rejects `[IO.Path]::GetInvalidFileNameChars()`, empty segments, `.`, `..`, rooted/drive-qualified paths, and alternate-separator tricks.
+- `Resolve-RoutedDestinationRoot` normalizes joined routed roots and fail-closes unless the result remains inside approved `DestinationRoot` (`Test-PathInsideRoot`).
+- Conflicting duplicate `ApprovedBatchPlan` rows for the same normalized `RecoveredPath` (different `DestinationSubfolder`, `ReviewClass`, or `MoveLane`) are rejected; exact duplicates are deduped/reported.
 
 **Resolved in v0.1.7:**
 

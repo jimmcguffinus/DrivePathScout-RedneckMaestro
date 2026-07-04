@@ -56,7 +56,7 @@ When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT S
 
 ## Move staging planner
 
-`Move-RecoveredToRealnameMatches.ps1` v0.1.7 implements move-only staging **preflight** per `STAGING_SPEC.md`. Default mode is DryRun — it does not move, copy, delete, or rename files.
+`Move-RecoveredToRealnameMatches.ps1` v0.1.8 implements move-only staging **preflight** per `STAGING_SPEC.md`. Default mode is DryRun — it does not move, copy, delete, or rename files.
 
 ```powershell
 .\Move-RecoveredToRealnameMatches.ps1 `
@@ -64,7 +64,7 @@ When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT S
   -Limit 10
 ```
 
-v0.1.7 adds `-ApprovedBatchPlan` routed batch targeting with per-path destination subfolders and `-ExpectedApprovedBatchPlanHash`. v0.1.6 adds `-ExpectedPathListHash` list-content binding and an all-or-nothing batch Execute readiness gate for `-OnlyRecoveredPathList`. DryRun planning and the Execute code passed Codex Sparky review. Jim authorized one exact-target pilot on 2026-07-03; it moved and verified one Suns PNG successfully. That authorization is consumed. No second file, batch/full Execute, copy, delete, or cleanup operation is authorized. v0.1 approved recovered move sources remain limited to `I:\recover\`.
+v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join containment checks inside approved `DestinationRoot`. v0.1.7 adds `-ApprovedBatchPlan` routed batch targeting with per-path destination subfolders and `-ExpectedApprovedBatchPlanHash`. v0.1.6 adds `-ExpectedPathListHash` list-content binding and an all-or-nothing batch Execute readiness gate for `-OnlyRecoveredPathList`. DryRun planning and the Execute code passed Codex Sparky review. Jim authorized one exact-target pilot on 2026-07-03; it moved and verified one Suns PNG successfully. That authorization is consumed. No second file, batch/full Execute, copy, delete, or cleanup operation is authorized. v0.1 approved recovered move sources remain limited to `I:\recover\`.
 
 ## Scope
 

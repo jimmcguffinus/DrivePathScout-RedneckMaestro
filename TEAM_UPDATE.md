@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.7 (DryRun planning passed Codex Sparky review; `-Execute` not approved)
+**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.8 (DryRun planning passed Codex Sparky review; v0.1.8 routing safety hardening; `-Execute` not approved)
 
-DryRun preflight is implemented and trusted for planning. v0.1.7 adds `-ApprovedBatchPlan` routed batch targeting. Execute remains blocked pending re-review and Jim approval.
+DryRun preflight is implemented and trusted for planning. v0.1.8 hardens routed `DestinationSubfolder` validation and post-join containment checks. Execute remains blocked pending re-review and Jim approval.
 
 ## 3. Hash Scout built
 

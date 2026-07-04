@@ -33,7 +33,7 @@ param(
     [switch]$Execute
 )
 
-# Drive Recovery Move Stager v0.1.7
+# Drive Recovery Move Stager v0.1.8
 # MOVE only when -Execute is passed. Default is DryRun preflight planning.
 # No Copy-Item. No Remove-Item. Never moves RealNamedPath keepers.
 
@@ -122,29 +122,59 @@ function Test-SafeDestinationSubfolder {
     if ([string]::IsNullOrWhiteSpace($Subfolder)) {
         throw 'DestinationSubfolder cannot be empty.'
     }
-    $trimmed = $Subfolder.Trim().TrimStart([char[]]'\/').TrimEnd([char[]]'\/')
-    if ([string]::IsNullOrWhiteSpace($trimmed)) {
-        throw "DestinationSubfolder resolved to empty after normalization: $Subfolder"
-    }
-    if ($trimmed -match '\.\.') {
-        throw "DestinationSubfolder contains '..': $Subfolder"
-    }
-    if ($trimmed -match '^[a-zA-Z]:') {
-        throw "DestinationSubfolder must be relative; drive letter not allowed: $Subfolder"
-    }
     if ($Subfolder -match '^[\\/]') {
         throw "DestinationSubfolder must be relative; leading slash not allowed: $Subfolder"
     }
-    if ($trimmed.IndexOfAny([char[]][IO.Path]::GetInvalidPathChars()) -ge 0) {
-        throw "DestinationSubfolder contains invalid path characters: $Subfolder"
+    if ($Subfolder -match '^[a-zA-Z]:') {
+        throw "DestinationSubfolder must be relative; drive letter not allowed: $Subfolder"
     }
-    foreach ($segment in ($trimmed -split '[\\/]')) {
-        if ([string]::IsNullOrWhiteSpace($segment)) { continue }
+    if ($Subfolder -match '\.\.') {
+        throw "DestinationSubfolder contains '..': $Subfolder"
+    }
+    $trimmed = $Subfolder.Trim().TrimEnd([char[]]'\/')
+    if ([string]::IsNullOrWhiteSpace($trimmed)) {
+        throw "DestinationSubfolder resolved to empty after normalization: $Subfolder"
+    }
+    $invalidFileNameChars = [char[]][IO.Path]::GetInvalidFileNameChars()
+    $segments = $trimmed -split '[\\/]'
+    $normalizedSegments = New-Object System.Collections.Generic.List[string]
+    foreach ($segment in $segments) {
+        if ([string]::IsNullOrWhiteSpace($segment)) {
+            throw "DestinationSubfolder contains an empty path segment: $Subfolder"
+        }
+        if ($segment -eq '.') {
+            throw "DestinationSubfolder contains '.' segment: $Subfolder"
+        }
+        if ($segment -eq '..') {
+            throw "DestinationSubfolder contains '..' segment: $Subfolder"
+        }
+        if ($segment.IndexOfAny($invalidFileNameChars) -ge 0) {
+            throw "DestinationSubfolder segment contains invalid filename characters '$segment' in: $Subfolder"
+        }
         if ($script:ReservedDeviceNames -contains $segment.ToUpperInvariant()) {
             throw "DestinationSubfolder contains reserved device name '$segment': $Subfolder"
         }
+        [void]$normalizedSegments.Add($segment)
     }
-    return ($trimmed -replace '/', '\')
+    if ($normalizedSegments.Count -eq 0) {
+        throw "DestinationSubfolder contains no path segments: $Subfolder"
+    }
+    return ($normalizedSegments -join '\')
+}
+
+function Resolve-RoutedDestinationRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$DestinationRoot,
+        [Parameter(Mandatory = $true)][string]$DestinationSubfolder
+    )
+    $safeSubfolder = Test-SafeDestinationSubfolder -Subfolder $DestinationSubfolder
+    $rootNormalized = Get-NormalizedPath $DestinationRoot
+    $combined = Join-Path $rootNormalized $safeSubfolder
+    $resolved = Get-NormalizedPath $combined
+    if (-not (Test-PathInsideRoot -ChildPath $resolved -RootPath $rootNormalized)) {
+        throw "Routed destination root escapes approved DestinationRoot. Subfolder=$DestinationSubfolder Resolved=$resolved DestinationRoot=$rootNormalized"
+    }
+    return $resolved
 }
 
 function Read-ApprovedBatchPlan {
@@ -162,7 +192,7 @@ function Read-ApprovedBatchPlan {
         throw "Approved batch plan is missing required columns: $($missing -join ', ')"
     }
     $entries = New-Object System.Collections.Generic.List[object]
-    $seen = @{}
+    $seenEntries = @{}
     $rawPathCount = 0
     $duplicatePathCount = 0
     foreach ($row in $rows) {
@@ -171,19 +201,28 @@ function Read-ApprovedBatchPlan {
             throw "Approved batch plan contains a path that normalized to empty: $($row.RecoveredPath)"
         }
         $subfolder = Test-SafeDestinationSubfolder -Subfolder $row.DestinationSubfolder
+        $reviewClass = $row.ReviewClass.Trim()
+        $moveLane = $row.MoveLane.Trim()
         $rawPathCount++
         $key = $normalizedPath.ToUpperInvariant()
-        if ($seen.ContainsKey($key)) {
+        if ($seenEntries.ContainsKey($key)) {
+            $existing = $seenEntries[$key]
+            if ($existing.DestinationSubfolder -ne $subfolder -or
+                $existing.ReviewClass -ne $reviewClass -or
+                $existing.MoveLane -ne $moveLane) {
+                throw "Approved batch plan contains conflicting duplicate RecoveredPath: $normalizedPath"
+            }
             $duplicatePathCount++
             continue
         }
-        $seen[$key] = $true
-        [void]$entries.Add([pscustomobject]@{
+        $entry = [pscustomobject]@{
             RecoveredPath        = $normalizedPath
             DestinationSubfolder = $subfolder
-            ReviewClass          = $row.ReviewClass
-            MoveLane             = $row.MoveLane
-        })
+            ReviewClass          = $reviewClass
+            MoveLane             = $moveLane
+        }
+        $seenEntries[$key] = $entry
+        [void]$entries.Add($entry)
     }
     if ($entries.Count -eq 0) {
         throw "Approved batch plan contains no usable paths: $PlanPath"
@@ -710,7 +749,7 @@ if ($missingColumns.Count -gt 0) {
     throw "Match CSV is missing required columns: $($missingColumns -join ', ')"
 }
 
-Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.7 mode=$runMode stamp=$stamp"
+Write-LogLine -Path $logReport -Message "START Move-RecoveredToRealnameMatches v0.1.8 mode=$runMode stamp=$stamp"
 Write-LogLine -Path $logReport -Message "MatchCsvPath=$MatchCsvPath"
 Write-LogLine -Path $logReport -Message "ReportRoot=$reportRootNormalized DestinationRoot=$destinationRootNormalized Algorithm=$Algorithm Limit=$Limit OnlyRecoveredPath=$OnlyRecoveredPath OnlyRecoveredPathList=$OnlyRecoveredPathList ExpectedPathListHash=$ExpectedPathListHash ApprovedBatchPlan=$ApprovedBatchPlan ExpectedApprovedBatchPlanHash=$ExpectedApprovedBatchPlanHash Execute=$Execute"
 if ($null -ne $onlyRecoveredPathListFileHash) {
@@ -825,7 +864,7 @@ foreach ($rowIndex in 0..($inputRows.Count - 1)) {
         $rowDestinationRoot = if ([string]::IsNullOrWhiteSpace($destinationSubfolder)) {
             $destinationRootNormalized
         } else {
-            Join-Path $destinationRootNormalized $destinationSubfolder
+            Resolve-RoutedDestinationRoot -DestinationRoot $destinationRootNormalized -DestinationSubfolder $destinationSubfolder
         }
 
         if ($PSBoundParameters.ContainsKey('Limit') -and $primaryWorkCount -gt $Limit) {
