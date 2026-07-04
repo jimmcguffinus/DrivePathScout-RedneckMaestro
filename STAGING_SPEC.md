@@ -2,7 +2,7 @@
 
 **Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8, `Remove-StagedDuplicateCandidates.ps1` v0.2.0 (parked final-delete tool), and `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2. Routed move Execute completed for batch `20260703-221211`. **Delete-review move DryRun only** — Execute blocked pending Codex re-review and Jim approval. **No hard delete.**
 
-**Version:** v0.2.4 CSV medium-review move planner + v0.2.3 GIF + v0.2.2 HIGH delete-review move (MOVE-only into `05_DELETE_REVIEW`; full execute preflight; `-Execute` requires Jim approval per plan hash)
+**Version:** v0.2.5 Suns/PNG medium-review move planner + v0.2.4 CSV + v0.2.3 GIF + v0.2.2 HIGH delete-review move
 
 **Date:** 2026-07-03
 
@@ -421,6 +421,12 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.5:**
+
+- `Move-StagedWorkbenchLaneToReview.ps1` — added `SunsPngMedium` lane profile (flat PNG under `recovered_to_realname` → `medium_review\suns_png`).
+- `New-ApprovedSunsPngReviewMovePlan.ps1` — builds plan from `remaining_png_suns_inventory_<stamp>.csv` with report coupling (LikelyClass, SuggestedLane).
+- No keeper verification for Suns/PNG profile (report inventory has no keeper rows).
+
 **Resolved in v0.2.4:**
 
 - `Move-StagedWorkbenchLaneToReview.ps1` — added `CsvMedium` lane profile (`data\csv` → `medium_review\csv`).
@@ -508,8 +514,8 @@ Do **not** implement or use:
 | Pilot authorization | **Consumed** — applied to that one source path only |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
 | `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move DryRun + execute preflight hardening | Done |
-| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.4 CSV medium-review move DryRun | Done |
-| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 GIF medium-review move Execute | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.5 Suns/PNG medium-review move DryRun | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.4 CSV medium-review move Execute | Done |
 | `Remove-StagedDuplicateCandidates.ps1` v0.2.0 final-delete tool | **Parked** — not for routine cleanup |
 | Delete-review move Execute | **Not authorized** |
 | Delete Execute (`Remove-StagedDuplicateCandidates.ps1 -Execute`) | **Not authorized** |

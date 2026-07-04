@@ -70,32 +70,32 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 
 `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files. v0.2.2 adds full execute preflight before any `Move-Item` and mandatory inventory coupling (fail-closed; not transactionally atomic after external I/O failure).
 
-`Move-StagedWorkbenchLaneToReview.ps1` v0.2.4 extends the lane mover with **`CsvMedium`** and **`GifMedium`** profiles. MOVE-only grouping into `05_DELETE_REVIEW` for human review — not hard delete.
+`Move-StagedWorkbenchLaneToReview.ps1` v0.2.5 extends the lane mover with **`SunsPngMedium`**, **`CsvMedium`**, and **`GifMedium`** profiles. MOVE-only grouping into `05_DELETE_REVIEW` for human review — not hard delete.
 
 | Lane | Source | Destination | Status |
 |------|--------|-------------|--------|
-| HIGH browser_extension | `...\browser_extension_assets` | `high_confidence_junk\browser_extension_assets` | Execute verified (1,280) |
-| HIGH theme_assets | `...\theme_assets` | `high_confidence_junk\theme_assets` | Execute verified (51) |
-| GIF | `...\images\gif` | `medium_review\gif` | Execute `20260703` verified (28) |
-| CSV | `...\data\csv` | `medium_review\csv` | Execute `20260704` verified (24) |
-
-**05_DELETE_REVIEW total:** 1,383 files. Remaining **04_DUPLICATES_STAGED:** 94 files (~227 MB) — mostly `mail\pst` (66, HOLD) plus Suns/PNG leftovers.
+| HIGH browser_extension | `...\browser_extension_assets` | `high_confidence_junk\...` | Execute verified (1,280) |
+| HIGH theme_assets | `...\theme_assets` | `high_confidence_junk\...` | Execute verified (51) |
+| GIF | `...\images\gif` | `medium_review\gif` | Execute verified (28) |
+| CSV | `...\data\csv` | `medium_review\csv` | Execute verified (24) |
+| Suns/PNG | flat under `recovered_to_realname` | `medium_review\suns_png` | **DryRun ready (28)** |
 
 Build plans:
 
 ```powershell
 .\New-ApprovedGifReviewMovePlan.ps1
 .\New-ApprovedCsvReviewMovePlan.ps1
+.\New-ApprovedSunsPngReviewMovePlan.ps1
 
-# CSV DryRun example
+# Suns/PNG DryRun example
 .\Move-StagedWorkbenchLaneToReview.ps1 `
-  -InventoryCsvPath "C:\Users\jim\Desktop\DrivePathInventory\staged_duplicate_inventory_20260703-221211.csv" `
-  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_csv_delete_review_move_plan_20260704.csv" `
+  -InventoryCsvPath "C:\Users\jim\Desktop\DrivePathInventory\remaining_png_suns_inventory_20260704.csv" `
+  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_suns_png_delete_review_move_plan_20260704.csv" `
   -ExpectedApprovedReviewMovePlanHash "<sha256>" `
-  -LaneProfile CsvMedium
+  -LaneProfile SunsPngMedium
 ```
 
-Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. **Next:** PST/mail policy review or Suns/PNG leftover inventory — no hard delete recommended.
+Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. PST lane (66 files) remains HOLD.
 
 ## Parked final-delete tool
 

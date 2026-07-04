@@ -20,16 +20,17 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$RunStamp,
 
-    [ValidateSet('GifMedium', 'CsvMedium')]
+    [ValidateSet('GifMedium', 'CsvMedium', 'SunsPngMedium')]
     [string]$LaneProfile = 'GifMedium',
 
     [switch]$Execute
 )
 
-# Workbench Lane Review Move Planner v0.2.4
+# Workbench Lane Review Move Planner v0.2.5
 # MOVE staged duplicate files from an approved workbench lane into 05_DELETE_REVIEW. Default is DryRun.
-# LaneProfile GifMedium: 04_DUPLICATES_STAGED\...\images\gif -> 05_DELETE_REVIEW\medium_review\gif
-# LaneProfile CsvMedium:  04_DUPLICATES_STAGED\...\data\csv   -> 05_DELETE_REVIEW\medium_review\csv
+# LaneProfile GifMedium:      04_DUPLICATES_STAGED\...\images\gif -> 05_DELETE_REVIEW\medium_review\gif
+# LaneProfile CsvMedium:       04_DUPLICATES_STAGED\...\data\csv   -> 05_DELETE_REVIEW\medium_review\csv
+# LaneProfile SunsPngMedium:   04_DUPLICATES_STAGED\...\recovered_to_realname (flat PNG) -> medium_review\suns_png
 # Full execute preflight eliminates predictable per-row blockers before the first Move-Item.
 # Not transactionally atomic after external I/O failure; manifest-based recovery may be required.
 # No Remove-Item. No Copy-Item. No Rename-Item. Never moves keeper files or I:\recover / I:\1tbrecover sources.
@@ -44,6 +45,10 @@ function Initialize-LaneProfile {
     $script:DeniedMoveSourcePrefixes = @('I:\recover\', 'I:\1tbrecover\')
     $script:VerifiedMoveStatuses = @('MovedVerified')
     $script:BatchExecuteReadyStatuses = @('DryRunReady', 'CollisionRenamed')
+    $script:InventoryCouplingMode = 'StagedDuplicate'
+    $script:RequiresKeeperVerification = $true
+    $script:RequiresFlatStagedRoot = $false
+    $script:ExcludedStagedSubfolderRoots = @()
     switch ($Profile) {
         'GifMedium' {
             $script:ApprovedStagedSourceRoots = @(
@@ -64,6 +69,25 @@ function Initialize-LaneProfile {
             $script:RequiredFileExtension = '.csv'
             $script:DeniedSourceSubfolderPatterns = @('mail\pst', 'images\gif', 'images\png')
             $script:ReportNamePrefix = 'csv_delete_review_move'
+        }
+        'SunsPngMedium' {
+            $script:ApprovedStagedSourceRoots = @(
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname'
+            )
+            $script:ApprovedSourceSubfolders = @('suns_png_root')
+            $script:ReviewLaneBySourceSubfolder = @{ 'suns_png_root' = 'medium_review\suns_png' }
+            $script:RequiredFileExtension = '.png'
+            $script:DeniedSourceSubfolderPatterns = @('mail\pst', 'data\csv', 'images\gif', 'images\png')
+            $script:ReportNamePrefix = 'suns_png_delete_review_move'
+            $script:InventoryCouplingMode = 'SunsPngReport'
+            $script:RequiresKeeperVerification = $false
+            $script:RequiresFlatStagedRoot = $true
+            $script:ExcludedStagedSubfolderRoots = @(
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\mail\pst',
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\images\gif',
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\data\csv',
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\images\png'
+            )
         }
         default {
             throw "Unsupported LaneProfile: $Profile"
@@ -131,9 +155,30 @@ function Test-PathUnderDeniedPrefix {
     return $false
 }
 
+function Test-StagedPathInExcludedSubfolder {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $normalized = Get-NormalizedPath $Path
+    foreach ($excluded in $script:ExcludedStagedSubfolderRoots) {
+        $exNorm = Get-NormalizedPath $excluded
+        if (Test-PathInsideRoot -ChildPath $normalized -RootPath $exNorm) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Test-StagedPathInApprovedSourceRoot {
     param([Parameter(Mandatory = $true)][string]$Path)
     $normalized = Get-NormalizedPath $Path
+    if (Test-StagedPathInExcludedSubfolder -Path $normalized) {
+        return $false
+    }
+    if ($script:RequiresFlatStagedRoot) {
+        $parent = Get-NormalizedPath (Split-Path -Parent $normalized)
+        if (-not $parent.Equals($script:StagedDuplicatesRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            return $false
+        }
+    }
     foreach ($root in $script:ApprovedStagedSourceRoots) {
         if (Test-PathInsideRoot -ChildPath $normalized -RootPath $root) {
             return $true
@@ -372,6 +417,12 @@ function Read-ApprovedReviewMovePlan {
         if (-not (Test-StagedPathInApprovedSourceRoot -Path $stagedPath)) {
             throw "Approved review move plan staged path is outside approved staged source roots: $stagedPath"
         }
+        if ($script:RequiresFlatStagedRoot) {
+            $parentDir = Get-NormalizedPath (Split-Path -Parent $stagedPath)
+            if (-not $parentDir.Equals($script:StagedDuplicatesRoot, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Approved review move plan staged path must be directly under recovered_to_realname root: $stagedPath"
+            }
+        }
         if (-not (Test-PathInsideRoot -ChildPath $stagedPath -RootPath $script:StagedDuplicatesRoot)) {
             throw "Approved review move plan staged path is outside staged duplicates root: $stagedPath"
         }
@@ -437,13 +488,33 @@ function Get-InventoryIndex {
     $index = @{}
     $duplicatePaths = New-Object System.Collections.Generic.List[string]
     foreach ($row in $rows) {
-        $key = (Get-NormalizedPath $row.StagedDuplicatePath).ToUpperInvariant()
-        if ([string]::IsNullOrWhiteSpace($key)) { continue }
-        if ($index.ContainsKey($key)) {
-            [void]$duplicatePaths.Add($row.StagedDuplicatePath)
+        if ($script:InventoryCouplingMode -eq 'SunsPngReport') {
+            $key = (Get-NormalizedPath $row.FullName).ToUpperInvariant()
+            if ([string]::IsNullOrWhiteSpace($key)) { continue }
+            if ($index.ContainsKey($key)) {
+                [void]$duplicatePaths.Add($row.FullName)
+            }
+            else {
+                $index[$key] = [pscustomobject]@{
+                    StagedDuplicatePath  = Get-NormalizedPath $row.FullName
+                    Hash                 = Get-NormalizedHash $row.SHA256
+                    SizeBytes            = $row.SizeBytes
+                    DestinationSubfolder = 'suns_png_root'
+                    LikelyClass          = $row.LikelyClass.Trim()
+                    SuggestedLane        = $row.SuggestedLane.Trim()
+                    ReviewReason         = $row.ReviewReason.Trim()
+                }
+            }
         }
         else {
-            $index[$key] = $row
+            $key = (Get-NormalizedPath $row.StagedDuplicatePath).ToUpperInvariant()
+            if ([string]::IsNullOrWhiteSpace($key)) { continue }
+            if ($index.ContainsKey($key)) {
+                [void]$duplicatePaths.Add($row.StagedDuplicatePath)
+            }
+            else {
+                $index[$key] = $row
+            }
         }
     }
     if ($duplicatePaths.Count -gt 0) {
@@ -463,6 +534,27 @@ function Get-PlanInventoryCouplingIssues {
     $issues = New-Object System.Collections.Generic.List[string]
     if ($null -eq $InventoryRow) {
         [void]$issues.Add('InventoryRowMissing')
+        return @($issues)
+    }
+    if ($script:InventoryCouplingMode -eq 'SunsPngReport') {
+        if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
+            [void]$issues.Add('InventoryHashMismatch')
+        }
+        if ([int64]$InventoryRow.SizeBytes -ne [int64]$PlanRow.SizeBytes) {
+            [void]$issues.Add('InventorySizeMismatch')
+        }
+        if ($InventoryRow.DestinationSubfolder.Trim() -ne $PlanRow.DestinationSubfolder) {
+            [void]$issues.Add('InventorySubfolderMismatch')
+        }
+        if ($InventoryRow.SuggestedLane -ne 'medium_review\suns_png') {
+            [void]$issues.Add('InventorySuggestedLaneMismatch')
+        }
+        if ($InventoryRow.LikelyClass -in @('UnknownPng', 'UnexpectedNonPst')) {
+            [void]$issues.Add('InventoryLikelyClassRejected')
+        }
+        if ($InventoryRow.LikelyClass -notin @('SunsPngDuplicate', 'CollisionLeftover')) {
+            [void]$issues.Add('InventoryLikelyClassMismatch')
+        }
         return @($issues)
     }
     if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
@@ -506,6 +598,13 @@ function Get-PlanInventoryCouplingIssues {
 
 function Test-InventoryRowEligible {
     param([Parameter(Mandatory = $true)]$Row)
+    if ($script:InventoryCouplingMode -eq 'SunsPngReport') {
+        return (
+            $Row.LikelyClass -in @('SunsPngDuplicate', 'CollisionLeftover') -and
+            $Row.SuggestedLane -eq 'medium_review\suns_png' -and
+            $script:ApprovedSourceSubfolders -contains $Row.DestinationSubfolder
+        )
+    }
     return (
         $Row.DeleteConfidence -eq $script:RequiredReviewConfidence -and
         $Row.MoveStatus -in $script:VerifiedMoveStatuses -and
@@ -526,10 +625,16 @@ function Test-ReviewMoveCandidateLive {
     )
     $issues = New-Object System.Collections.Generic.List[string]
     $stagedPath = $PlanRow.StagedDuplicatePath
-    $keeperPath = if ($null -ne $InventoryRow -and -not [string]::IsNullOrWhiteSpace($InventoryRow.KeeperPath)) {
-        Get-NormalizedPath $InventoryRow.KeeperPath
-    } else {
-        Get-NormalizedPath $PlanRow.KeeperPath
+    $keeperPath = ''
+    if ($script:RequiresKeeperVerification) {
+        $keeperPath = if ($null -ne $InventoryRow -and
+            ($InventoryRow.PSObject.Properties.Name -contains 'KeeperPath') -and
+            -not [string]::IsNullOrWhiteSpace($InventoryRow.KeeperPath)) {
+            Get-NormalizedPath $InventoryRow.KeeperPath
+        }
+        else {
+            Get-NormalizedPath $PlanRow.KeeperPath
+        }
     }
 
     foreach ($couplingIssue in (Get-PlanInventoryCouplingIssues -PlanRow $PlanRow -InventoryRow $InventoryRow)) {
@@ -600,18 +705,20 @@ function Test-ReviewMoveCandidateLive {
         }
     }
 
-    if (-not (Test-Path -LiteralPath $keeperPath)) {
-        [void]$issues.Add('KeeperMissing')
-    }
-    else {
-        try {
-            $keeperHash = Get-NormalizedHash (Get-FileHash -LiteralPath $keeperPath -Algorithm SHA256).Hash
-            if ($keeperHash -ne $PlanRow.Hash) {
-                [void]$issues.Add('KeeperHashMismatch')
-            }
+    if ($script:RequiresKeeperVerification) {
+        if (-not (Test-Path -LiteralPath $keeperPath)) {
+            [void]$issues.Add('KeeperMissing')
         }
-        catch {
-            [void]$issues.Add('KeeperHashCheckFailed')
+        else {
+            try {
+                $keeperHash = Get-NormalizedHash (Get-FileHash -LiteralPath $keeperPath -Algorithm SHA256).Hash
+                if ($keeperHash -ne $PlanRow.Hash) {
+                    [void]$issues.Add('KeeperHashMismatch')
+                }
+            }
+            catch {
+                [void]$issues.Add('KeeperHashCheckFailed')
+            }
         }
     }
 
@@ -636,10 +743,16 @@ function Test-ExecutePreflightRow {
     )
     $issues = New-Object System.Collections.Generic.List[string]
     $stagedPath = $PreflightRow.StagedDuplicatePath
-    $keeperPath = if ($null -ne $InventoryRow -and -not [string]::IsNullOrWhiteSpace($InventoryRow.KeeperPath)) {
-        Get-NormalizedPath $InventoryRow.KeeperPath
-    } else {
-        Get-NormalizedPath $PreflightRow.KeeperPath
+    $keeperPath = ''
+    if ($script:RequiresKeeperVerification) {
+        $keeperPath = if ($null -ne $InventoryRow -and
+            ($InventoryRow.PSObject.Properties.Name -contains 'KeeperPath') -and
+            -not [string]::IsNullOrWhiteSpace($InventoryRow.KeeperPath)) {
+            Get-NormalizedPath $InventoryRow.KeeperPath
+        }
+        else {
+            Get-NormalizedPath $PreflightRow.KeeperPath
+        }
     }
     $plannedDest = $PreflightRow.PlannedDeleteReviewPath
 
@@ -703,16 +816,18 @@ function Test-ExecutePreflightRow {
         }
     }
 
-    if (-not (Test-Path -LiteralPath $keeperPath)) {
-        [void]$issues.Add('KeeperMissing')
-    }
-    else {
-        try {
-            $keeperHash = Get-NormalizedHash (Get-FileHash -LiteralPath $keeperPath -Algorithm SHA256).Hash
-            if ($keeperHash -ne $PreflightRow.Hash) { [void]$issues.Add('KeeperHashMismatch') }
+    if ($script:RequiresKeeperVerification) {
+        if (-not (Test-Path -LiteralPath $keeperPath)) {
+            [void]$issues.Add('KeeperMissing')
         }
-        catch {
-            [void]$issues.Add('KeeperHashCheckFailed')
+        else {
+            try {
+                $keeperHash = Get-NormalizedHash (Get-FileHash -LiteralPath $keeperPath -Algorithm SHA256).Hash
+                if ($keeperHash -ne $PreflightRow.Hash) { [void]$issues.Add('KeeperHashMismatch') }
+            }
+            catch {
+                [void]$issues.Add('KeeperHashCheckFailed')
+            }
         }
     }
 
@@ -820,7 +935,7 @@ $inventoryData = Get-InventoryIndex -Path $InventoryCsvPath
 $planReadResult = Read-ApprovedReviewMovePlan -PlanPath $ApprovedReviewMovePlan -DeleteReviewRoot $deleteReviewRootNormalized
 $planEntries = $planReadResult.Entries
 
-Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.4 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
+Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.5 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
 Write-LogLine -Path $logReport -Message "InventoryCsvPath=$InventoryCsvPath"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan=$ApprovedReviewMovePlan"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan_FileSha256=$planFileHash"
@@ -839,7 +954,11 @@ foreach ($planRow in $planEntries) {
     $invKey = $planRow.StagedDuplicatePath.ToUpperInvariant()
     if ($inventoryData.Index.ContainsKey($invKey)) {
         $inventoryRow = $inventoryData.Index[$invKey]
-        $planRow.KeeperPath = Get-NormalizedPath $inventoryRow.KeeperPath
+        if ($script:RequiresKeeperVerification -and
+            ($inventoryRow.PSObject.Properties.Name -contains 'KeeperPath') -and
+            -not [string]::IsNullOrWhiteSpace($inventoryRow.KeeperPath)) {
+            $planRow.KeeperPath = Get-NormalizedPath $inventoryRow.KeeperPath
+        }
     }
     $live = Test-ReviewMoveCandidateLive -PlanRow $planRow -DeleteReviewRoot $deleteReviewRootNormalized -InventoryRow $inventoryRow
     $plannedDeleteReviewPath = $planRow.DeleteReviewPath
@@ -1005,12 +1124,14 @@ if ($Execute) {
             if ($stagedHashBefore -ne $item.Hash) {
                 throw 'Staged hash mismatch on execute re-check.'
             }
-            if (-not (Test-Path -LiteralPath $item.KeeperPath)) {
-                throw 'Keeper missing on execute re-check.'
-            }
-            $keeperHashBefore = Get-NormalizedHash (Get-FileHash -LiteralPath $item.KeeperPath -Algorithm SHA256).Hash
-            if ($keeperHashBefore -ne $item.Hash) {
-                throw 'Keeper hash mismatch on execute re-check.'
+            if ($script:RequiresKeeperVerification) {
+                if (-not (Test-Path -LiteralPath $item.KeeperPath)) {
+                    throw 'Keeper missing on execute re-check.'
+                }
+                $keeperHashBefore = Get-NormalizedHash (Get-FileHash -LiteralPath $item.KeeperPath -Algorithm SHA256).Hash
+                if ($keeperHashBefore -ne $item.Hash) {
+                    throw 'Keeper hash mismatch on execute re-check.'
+                }
             }
             if (Test-Path -LiteralPath $item.PlannedDeleteReviewPath) {
                 throw 'Delete review destination already exists on execute re-check.'
@@ -1054,12 +1175,14 @@ if ($Execute) {
                 if ($reviewHashAfter -ne $item.Hash) {
                     throw 'Delete review hash mismatch after move.'
                 }
-                if (-not (Test-Path -LiteralPath $item.KeeperPath)) {
-                    throw 'Keeper missing after move.'
-                }
-                $keeperHashAfter = Get-NormalizedHash (Get-FileHash -LiteralPath $item.KeeperPath -Algorithm SHA256).Hash
-                if ($keeperHashAfter -ne $item.Hash) {
-                    throw 'Keeper hash mismatch after move.'
+                if ($script:RequiresKeeperVerification) {
+                    if (-not (Test-Path -LiteralPath $item.KeeperPath)) {
+                        throw 'Keeper missing after move.'
+                    }
+                    $keeperHashAfter = Get-NormalizedHash (Get-FileHash -LiteralPath $item.KeeperPath -Algorithm SHA256).Hash
+                    if ($keeperHashAfter -ne $item.Hash) {
+                        throw 'Keeper hash mismatch after move.'
+                    }
                 }
 
                 $executionStatus = 'MovedVerified'
