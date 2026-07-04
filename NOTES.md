@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF medium-review move; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move
+- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move
 
 **Meaning:**
 
@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** v0.2.5 Suns/PNG medium-review Execute **verified** (28 files → `medium_review\suns_png`). **05_DELETE_REVIEW** now holds 1,411 files across five lanes. **04_DUPLICATES_STAGED** is PST-only (66 files, HOLD). Recommend PST/mail policy review — no hard delete.
+**Safe next step:** PST human-review move DryRun ready (`approved_pst_human_review_move_plan_20260704.csv`, 66 files → `06_HUMAN_REVIEW\mail\pst_duplicates`). Suns/PNG Execute verified. **Do not run PST `-Execute` without Jim approval of exact plan hash.** 04_DUPLICATES_STAGED remains PST-only (66, HOLD until move authorized).
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 

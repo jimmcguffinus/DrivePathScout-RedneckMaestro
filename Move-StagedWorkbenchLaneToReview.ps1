@@ -18,19 +18,23 @@ param(
     [string]$DeleteReviewRoot = 'I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW',
 
     [ValidateNotNullOrEmpty()]
+    [string]$HumanReviewRoot = 'I:\_RECOVERY_WORKBENCH\06_HUMAN_REVIEW',
+
+    [ValidateNotNullOrEmpty()]
     [string]$RunStamp,
 
-    [ValidateSet('GifMedium', 'CsvMedium', 'SunsPngMedium')]
+    [ValidateSet('GifMedium', 'CsvMedium', 'SunsPngMedium', 'PstHumanReview')]
     [string]$LaneProfile = 'GifMedium',
 
     [switch]$Execute
 )
 
-# Workbench Lane Review Move Planner v0.2.5
-# MOVE staged duplicate files from an approved workbench lane into 05_DELETE_REVIEW. Default is DryRun.
-# LaneProfile GifMedium:      04_DUPLICATES_STAGED\...\images\gif -> 05_DELETE_REVIEW\medium_review\gif
-# LaneProfile CsvMedium:       04_DUPLICATES_STAGED\...\data\csv   -> 05_DELETE_REVIEW\medium_review\csv
-# LaneProfile SunsPngMedium:   04_DUPLICATES_STAGED\...\recovered_to_realname (flat PNG) -> medium_review\suns_png
+# Workbench Lane Review Move Planner v0.2.6
+# MOVE staged duplicate files from an approved workbench lane into review roots. Default is DryRun.
+# LaneProfile GifMedium:       04_DUPLICATES_STAGED\...\images\gif -> 05_DELETE_REVIEW\medium_review\gif
+# LaneProfile CsvMedium:        04_DUPLICATES_STAGED\...\data\csv   -> 05_DELETE_REVIEW\medium_review\csv
+# LaneProfile SunsPngMedium:    04_DUPLICATES_STAGED\...\recovered_to_realname (flat PNG) -> medium_review\suns_png
+# LaneProfile PstHumanReview:   04_DUPLICATES_STAGED\...\mail\pst -> 06_HUMAN_REVIEW\mail\pst_duplicates
 # Full execute preflight eliminates predictable per-row blockers before the first Move-Item.
 # Not transactionally atomic after external I/O failure; manifest-based recovery may be required.
 # No Remove-Item. No Copy-Item. No Rename-Item. Never moves keeper files or I:\recover / I:\1tbrecover sources.
@@ -47,8 +51,12 @@ function Initialize-LaneProfile {
     $script:BatchExecuteReadyStatuses = @('DryRunReady', 'CollisionRenamed')
     $script:InventoryCouplingMode = 'StagedDuplicate'
     $script:RequiresKeeperVerification = $true
+    $script:RequiresKeeperReviewCopy = $false
     $script:RequiresFlatStagedRoot = $false
     $script:ExcludedStagedSubfolderRoots = @()
+    $script:UsesHumanReviewRoot = $false
+    $script:PlanDestinationPathColumn = 'DeleteReviewPath'
+    $script:ForbiddenDestinationRoots = @()
     switch ($Profile) {
         'GifMedium' {
             $script:ApprovedStagedSourceRoots = @(
@@ -88,6 +96,22 @@ function Initialize-LaneProfile {
                 'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\data\csv',
                 'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\images\png'
             )
+        }
+        'PstHumanReview' {
+            $script:ApprovedStagedSourceRoots = @(
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname\mail\pst'
+            )
+            $script:ApprovedSourceSubfolders = @('mail\pst')
+            $script:ReviewLaneBySourceSubfolder = @{ 'mail\pst' = 'mail\pst_duplicates' }
+            $script:RequiredFileExtension = '.pst'
+            $script:DeniedSourceSubfolderPatterns = @()
+            $script:ReportNamePrefix = 'pst_human_review_move'
+            $script:InventoryCouplingMode = 'PstPolicyReport'
+            $script:RequiresKeeperVerification = $true
+            $script:RequiresKeeperReviewCopy = $true
+            $script:UsesHumanReviewRoot = $true
+            $script:PlanDestinationPathColumn = 'HumanReviewPath'
+            $script:ForbiddenDestinationRoots = @('I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW')
         }
         default {
             throw "Unsupported LaneProfile: $Profile"
@@ -383,7 +407,7 @@ function Read-ApprovedReviewMovePlan {
     if ($rows.Count -eq 0) {
         throw "Approved review move plan contains no rows: $PlanPath"
     }
-    $required = @('Hash', 'ShortHash', 'SizeBytes', 'StagedDuplicatePath', 'DeleteReviewPath', 'DestinationSubfolder', 'ReviewConfidence', 'ReviewReason')
+    $required = @('Hash', 'ShortHash', 'SizeBytes', 'StagedDuplicatePath', $script:PlanDestinationPathColumn, 'DestinationSubfolder', 'ReviewConfidence', 'ReviewReason')
     $missing = @($required | Where-Object { $rows[0].PSObject.Properties.Name -notcontains $_ })
     if ($missing.Count -gt 0) {
         throw "Approved review move plan is missing required columns: $($missing -join ', ')"
@@ -395,7 +419,7 @@ function Read-ApprovedReviewMovePlan {
     $duplicatePathCount = 0
     foreach ($row in $rows) {
         $stagedPath = Test-SafeLiteralMovePath -Path $row.StagedDuplicatePath
-        $deleteReviewPath = Test-SafeLiteralMovePath -Path $row.DeleteReviewPath
+        $deleteReviewPath = Test-SafeLiteralMovePath -Path $row.($script:PlanDestinationPathColumn)
         $subfolder = $row.DestinationSubfolder.Trim()
         $confidence = $row.ReviewConfidence.Trim().ToUpperInvariant()
         $hash = Get-NormalizedHash $row.Hash
@@ -433,13 +457,23 @@ function Read-ApprovedReviewMovePlan {
             throw "Approved review move plan staged path is a directory, not a file: $stagedPath"
         }
         if (-not (Test-PathInsideRoot -ChildPath $deleteReviewPath -RootPath $reviewRootNormalized)) {
-            throw "Approved review move plan DeleteReviewPath escapes DeleteReviewRoot: $deleteReviewPath"
+            throw "Approved review move plan destination path escapes review root: $deleteReviewPath"
+        }
+        foreach ($forbiddenRoot in $script:ForbiddenDestinationRoots) {
+            $forbiddenNormalized = Get-NormalizedPath $forbiddenRoot
+            if (Test-PathInsideRoot -ChildPath $deleteReviewPath -RootPath $forbiddenNormalized) {
+                throw "Approved review move plan destination path is under forbidden root '$forbiddenNormalized': $deleteReviewPath"
+            }
         }
         $expectedReviewPath = Get-ExpectedDeleteReviewPath -StagedDuplicatePath $stagedPath -DestinationSubfolder $subfolder -DeleteReviewRoot $reviewRootNormalized
         $expectedReviewDir = Split-Path -Parent $expectedReviewPath
         $actualReviewDir = Split-Path -Parent $deleteReviewPath
         if (-not $actualReviewDir.Equals($expectedReviewDir, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Approved review move plan DeleteReviewPath is in wrong review lane: $deleteReviewPath"
+            throw "Approved review move plan destination path is in wrong review lane: $deleteReviewPath"
+        }
+        $keeperPath = ''
+        if ($row.PSObject.Properties.Name -contains 'KeeperPath') {
+            $keeperPath = Get-NormalizedPath $row.KeeperPath
         }
         $key = $stagedPath.ToUpperInvariant()
         if ($seenEntries.ContainsKey($key)) {
@@ -458,7 +492,8 @@ function Read-ApprovedReviewMovePlan {
             SizeBytes            = $row.SizeBytes
             StagedDuplicatePath  = $stagedPath
             DeleteReviewPath     = $deleteReviewPath
-            KeeperPath           = ''
+            KeeperPath           = $keeperPath
+            KeeperReviewCopyPath = if ($row.PSObject.Properties.Name -contains 'KeeperReviewCopyPath') { Get-NormalizedPath $row.KeeperReviewCopyPath } else { '' }
             DestinationSubfolder = $subfolder
             ReviewConfidence     = $confidence
             ReviewReason         = $row.ReviewReason.Trim()
@@ -503,6 +538,28 @@ function Get-InventoryIndex {
                     LikelyClass          = $row.LikelyClass.Trim()
                     SuggestedLane        = $row.SuggestedLane.Trim()
                     ReviewReason         = $row.ReviewReason.Trim()
+                }
+            }
+        }
+        elseif ($script:InventoryCouplingMode -eq 'PstPolicyReport') {
+            $key = (Get-NormalizedPath $row.StagedDuplicatePath).ToUpperInvariant()
+            if ([string]::IsNullOrWhiteSpace($key)) { continue }
+            if ($index.ContainsKey($key)) {
+                [void]$duplicatePaths.Add($row.StagedDuplicatePath)
+            }
+            else {
+                $index[$key] = [pscustomobject]@{
+                    StagedDuplicatePath    = Get-NormalizedPath $row.StagedDuplicatePath
+                    Hash                   = Get-NormalizedHash $row.SHA256
+                    SizeBytes              = $row.SizeBytes
+                    DestinationSubfolder   = 'mail\pst'
+                    SuggestedPolicyLane    = $row.SuggestedPolicyLane.Trim()
+                    KeeperPath             = Get-NormalizedPath $row.KeeperPath
+                    KeeperReviewCopyPath   = Get-NormalizedPath $row.KeeperReviewCopyPath
+                    KeeperExists           = $row.KeeperExists
+                    KeeperHashMatches      = $row.KeeperHashMatches
+                    KeeperReviewCopyExists = $row.KeeperReviewCopyExists
+                    ReviewReason           = $row.PolicyReason.Trim()
                 }
             }
         }
@@ -557,6 +614,40 @@ function Get-PlanInventoryCouplingIssues {
         }
         return @($issues)
     }
+    if ($script:InventoryCouplingMode -eq 'PstPolicyReport') {
+        if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
+            [void]$issues.Add('InventoryHashMismatch')
+        }
+        if ([int64]$InventoryRow.SizeBytes -ne [int64]$PlanRow.SizeBytes) {
+            [void]$issues.Add('InventorySizeMismatch')
+        }
+        if ($InventoryRow.DestinationSubfolder.Trim() -ne $PlanRow.DestinationSubfolder) {
+            [void]$issues.Add('InventorySubfolderMismatch')
+        }
+        if ($InventoryRow.SuggestedPolicyLane -ne 'REVIEW_GROUP_CANDIDATE') {
+            [void]$issues.Add('InventoryPolicyLaneMismatch')
+        }
+        if ($InventoryRow.SuggestedPolicyLane -eq 'BLOCKED') {
+            [void]$issues.Add('InventoryPolicyLaneBlocked')
+        }
+        if ($InventoryRow.SuggestedPolicyLane -eq 'HOLD_MAIL_ARCHIVE') {
+            [void]$issues.Add('InventoryPolicyLaneHold')
+        }
+        if ($InventoryRow.KeeperExists -ne 'True') {
+            [void]$issues.Add('InventoryKeeperMissing')
+        }
+        if ($InventoryRow.KeeperHashMatches -ne 'True') {
+            [void]$issues.Add('InventoryKeeperHashMismatch')
+        }
+        if ($InventoryRow.KeeperReviewCopyExists -ne 'True') {
+            [void]$issues.Add('InventoryKeeperReviewCopyMissing')
+        }
+        if ((Get-NormalizedPath $InventoryRow.KeeperPath) -ne (Get-NormalizedPath $PlanRow.KeeperPath) -and
+            -not [string]::IsNullOrWhiteSpace($PlanRow.KeeperPath)) {
+            [void]$issues.Add('InventoryKeeperMismatch')
+        }
+        return @($issues)
+    }
     if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
         [void]$issues.Add('InventoryHashMismatch')
     }
@@ -603,6 +694,15 @@ function Test-InventoryRowEligible {
             $Row.LikelyClass -in @('SunsPngDuplicate', 'CollisionLeftover') -and
             $Row.SuggestedLane -eq 'medium_review\suns_png' -and
             $script:ApprovedSourceSubfolders -contains $Row.DestinationSubfolder
+        )
+    }
+    if ($script:InventoryCouplingMode -eq 'PstPolicyReport') {
+        return (
+            $Row.SuggestedPolicyLane -eq 'REVIEW_GROUP_CANDIDATE' -and
+            $Row.KeeperExists -eq 'True' -and
+            $Row.KeeperHashMatches -eq 'True' -and
+            $Row.KeeperReviewCopyExists -eq 'True' -and
+            $script:ApprovedSourceSubfolders -contains 'mail\pst'
         )
     }
     return (
@@ -718,6 +818,38 @@ function Test-ReviewMoveCandidateLive {
             }
             catch {
                 [void]$issues.Add('KeeperHashCheckFailed')
+            }
+        }
+    }
+
+    if ($script:RequiresKeeperReviewCopy) {
+        $reviewCopyPath = if ($null -ne $InventoryRow -and
+            ($InventoryRow.PSObject.Properties.Name -contains 'KeeperReviewCopyPath') -and
+            -not [string]::IsNullOrWhiteSpace($InventoryRow.KeeperReviewCopyPath)) {
+            Get-NormalizedPath $InventoryRow.KeeperReviewCopyPath
+        }
+        elseif ($PlanRow.PSObject.Properties.Name -contains 'KeeperReviewCopyPath' -and
+            -not [string]::IsNullOrWhiteSpace($PlanRow.KeeperReviewCopyPath)) {
+            Get-NormalizedPath $PlanRow.KeeperReviewCopyPath
+        }
+        else {
+            ''
+        }
+        if ([string]::IsNullOrWhiteSpace($reviewCopyPath)) {
+            [void]$issues.Add('KeeperReviewCopyPathMissing')
+        }
+        elseif (-not (Test-Path -LiteralPath $reviewCopyPath)) {
+            [void]$issues.Add('KeeperReviewCopyMissing')
+        }
+        else {
+            try {
+                $reviewCopyHash = Get-NormalizedHash (Get-FileHash -LiteralPath $reviewCopyPath -Algorithm SHA256).Hash
+                if ($reviewCopyHash -ne $PlanRow.Hash) {
+                    [void]$issues.Add('KeeperReviewCopyHashMismatch')
+                }
+            }
+            catch {
+                [void]$issues.Add('KeeperReviewCopyHashCheckFailed')
             }
         }
     }
@@ -916,7 +1048,12 @@ if (-not $PSBoundParameters.ContainsKey('RunStamp')) {
 }
 
 $reportRootNormalized = Get-NormalizedPath $ReportRoot
-$deleteReviewRootNormalized = Get-NormalizedPath $DeleteReviewRoot
+if ($script:UsesHumanReviewRoot) {
+    $deleteReviewRootNormalized = Get-NormalizedPath $HumanReviewRoot
+}
+else {
+    $deleteReviewRootNormalized = Get-NormalizedPath $DeleteReviewRoot
+}
 if (Test-PathInsideRoot -ChildPath $reportRootNormalized -RootPath 'I:\') {
     throw "ReportRoot must be outside I:\. ReportRoot=$reportRootNormalized"
 }
@@ -935,11 +1072,12 @@ $inventoryData = Get-InventoryIndex -Path $InventoryCsvPath
 $planReadResult = Read-ApprovedReviewMovePlan -PlanPath $ApprovedReviewMovePlan -DeleteReviewRoot $deleteReviewRootNormalized
 $planEntries = $planReadResult.Entries
 
-Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.5 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
+Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.6 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
 Write-LogLine -Path $logReport -Message "InventoryCsvPath=$InventoryCsvPath"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan=$ApprovedReviewMovePlan"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan_FileSha256=$planFileHash"
-Write-LogLine -Path $logReport -Message "DeleteReviewRoot=$deleteReviewRootNormalized ExpectedApprovedReviewMovePlanHash=$ExpectedApprovedReviewMovePlanHash Execute=$Execute"
+$reviewRootLabel = if ($script:UsesHumanReviewRoot) { "HumanReviewRoot=$deleteReviewRootNormalized" } else { "DeleteReviewRoot=$deleteReviewRootNormalized" }
+Write-LogLine -Path $logReport -Message "$reviewRootLabel ExpectedApprovedReviewMovePlanHash=$ExpectedApprovedReviewMovePlanHash Execute=$Execute"
 
 $started = Get-Date
 $preflightRows = New-Object System.Collections.Generic.List[object]
@@ -959,6 +1097,21 @@ foreach ($planRow in $planEntries) {
             -not [string]::IsNullOrWhiteSpace($inventoryRow.KeeperPath)) {
             $planRow.KeeperPath = Get-NormalizedPath $inventoryRow.KeeperPath
         }
+        elseif (-not [string]::IsNullOrWhiteSpace($planRow.KeeperPath)) {
+            $planRow.KeeperPath = Get-NormalizedPath $planRow.KeeperPath
+        }
+        if ($script:RequiresKeeperReviewCopy -and
+            ($inventoryRow.PSObject.Properties.Name -contains 'KeeperReviewCopyPath') -and
+            -not [string]::IsNullOrWhiteSpace($inventoryRow.KeeperReviewCopyPath)) {
+            $planRow.KeeperReviewCopyPath = Get-NormalizedPath $inventoryRow.KeeperReviewCopyPath
+        }
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($planRow.KeeperPath)) {
+        $planRow.KeeperPath = Get-NormalizedPath $planRow.KeeperPath
+    }
+    if ($planRow.PSObject.Properties.Name -contains 'KeeperReviewCopyPath' -and
+        -not [string]::IsNullOrWhiteSpace($planRow.KeeperReviewCopyPath)) {
+        $planRow.KeeperReviewCopyPath = Get-NormalizedPath $planRow.KeeperReviewCopyPath
     }
     $live = Test-ReviewMoveCandidateLive -PlanRow $planRow -DeleteReviewRoot $deleteReviewRootNormalized -InventoryRow $inventoryRow
     $plannedDeleteReviewPath = $planRow.DeleteReviewPath
