@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8 and `Remove-StagedDuplicateCandidates.ps1` v0.2.0. Move staging Execute completed for routed batch `20260703-221211`. **Delete planner DryRun only** — delete Execute blocked pending Codex review and Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8, `Remove-StagedDuplicateCandidates.ps1` v0.2.0 (parked final-delete tool), and `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1. Routed move Execute completed for batch `20260703-221211`. **Delete-review move DryRun only** — Execute blocked pending Codex review and Jim approval. **No hard delete.**
 
-**Version:** v0.2.0 staged duplicate delete planner (DryRun only; `-Execute` not approved for deletes)
+**Version:** v0.2.1 delete-review move planner (MOVE-only into `05_DELETE_REVIEW`; `-Execute` not approved)
 
 **Date:** 2026-07-03
 
@@ -421,9 +421,15 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.1:**
+
+- `Move-StagedDuplicatesToDeleteReview.ps1` — MOVE-only planner for HIGH-confidence staged duplicates into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\`.
+- Approved review-move plan + SHA-256 binding; keeper verification; same-volume `Move-Item` only behind `-Execute` + `ShouldProcess`.
+- Policy: immediate cleanup path is human review grouping, not hard delete.
+
 **Resolved in v0.2.0:**
 
-- `Remove-StagedDuplicateCandidates.ps1` — staged duplicate delete planner (DryRun default).
+- `Remove-StagedDuplicateCandidates.ps1` — **parked** as future final-delete tool only. Do not use `-Execute` for routine cleanup.
 - Deletes only files under approved HIGH-confidence folders: `images\png\browser_extension_assets`, `images\png\theme_assets`.
 - Requires `-ApprovedDeletePlan` + `-ExpectedApprovedDeletePlanHash` (required on `-Execute`).
 - All-or-nothing batch validation before any `Remove-Item`; exact `-LiteralPath` only; no wildcards, recursion, or directory deletes.
@@ -482,7 +488,8 @@ Do **not** implement or use:
 | Codex Sparky Execute code review | **Passed** for exact-target technical readiness |
 | One-file exact-target pilot | **Passed** — one Suns PNG moved and verified on 2026-07-03 |
 | Pilot authorization | **Consumed** — applied to that one source path only |
-| `Remove-StagedDuplicateCandidates.ps1` v0.2.0 DryRun delete planner | Done |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
+| `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1 delete-review move DryRun | Done |
+| `Remove-StagedDuplicateCandidates.ps1` v0.2.0 final-delete tool | **Parked** — not for routine cleanup |
+| Delete-review move Execute | **Not authorized** |
 | Delete Execute (`Remove-StagedDuplicateCandidates.ps1 -Execute`) | **Not authorized** |
-| Batch/full staging, copy, delete cleanup beyond approved planner DryRun | **Not authorized** |

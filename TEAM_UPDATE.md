@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.8; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 delete planner (DryRun only; delete `-Execute` not approved)
+**Design spec:** `STAGING_SPEC.md` — `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1 delete-review move planner (MOVE-only; `-Execute` not approved); `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
 
-Routed move Execute batch `20260703-221211` completed: 1,383 staged duplicates moved and verified. v0.2.0 delete planner supports HIGH-confidence staged duplicate delete DryRun only. Delete Execute remains blocked pending re-review and Jim approval.
+Routed move Execute batch `20260703-221211` completed: 1,383 staged duplicates moved and verified. v0.2.1 moves HIGH-confidence junk into `05_DELETE_REVIEW` for human decision — no hard delete. Delete-review move Execute remains blocked pending re-review and Jim approval.
 
 ## 3. Hash Scout built
 

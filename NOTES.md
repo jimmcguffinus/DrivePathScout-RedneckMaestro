@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-RecoveredToRealnameMatches.ps1` v0.1.8; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 delete planner (DryRun only; delete `-Execute` not approved)
+- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1 delete-review move planner (MOVE-only; `-Execute` not approved); `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
 
 **Meaning:**
 
@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** Routed move Execute `20260703-221211` completed (1,383 verified). HIGH-confidence delete planner DryRun available via `Remove-StagedDuplicateCandidates.ps1`. **Do not run delete `-Execute`.** Pending Codex review and Jim approval.
+**Safe next step:** HIGH-confidence junk delete-review move DryRun available via `Move-StagedDuplicatesToDeleteReview.ps1`. **Do not run delete-review `-Execute` or hard-delete `-Execute`.** Pending Codex review and Jim approval.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 

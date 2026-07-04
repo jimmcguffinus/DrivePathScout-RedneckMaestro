@@ -66,18 +66,22 @@ When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT S
 
 v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join containment checks inside approved `DestinationRoot`. Routed batch Execute `20260703-221211` moved 1,383 staged duplicates with full verification.
 
-## Staged duplicate delete planner
+## Staged duplicate delete-review move planner
 
-`Remove-StagedDuplicateCandidates.ps1` v0.2.0 plans deletion of **already-staged** HIGH-confidence duplicate files only. Default mode is DryRun — it does not delete, move, copy, or rename files.
+`Move-StagedDuplicatesToDeleteReview.ps1` v0.2.1 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files.
 
 ```powershell
-.\Remove-StagedDuplicateCandidates.ps1 `
+.\Move-StagedDuplicatesToDeleteReview.ps1 `
   -InventoryCsvPath "C:\Users\jim\Desktop\DrivePathInventory\staged_duplicate_inventory_20260703-221211.csv" `
-  -ApprovedDeletePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_high_confidence_delete_plan_20260703-221211.csv" `
-  -ExpectedApprovedDeletePlanHash "<sha256>"
+  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_high_confidence_delete_review_move_plan_20260703-221211.csv" `
+  -ExpectedApprovedReviewMovePlanHash "<sha256>"
 ```
 
-Approved delete scope: only files under `images\png\browser_extension_assets` and `images\png\theme_assets` inside `I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname`. Never deletes keepers, `I:\recover\`, or `I:\1tbrecover\` paths. Delete `-Execute` is not authorized.
+Source lanes: `04_DUPLICATES_STAGED\...\browser_extension_assets` and `theme_assets`. Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. Delete-review move `-Execute` is not authorized.
+
+## Parked final-delete tool
+
+`Remove-StagedDuplicateCandidates.ps1` v0.2.0 remains available as a **parked future final-delete** planner only. Do not use `-Execute` for routine cleanup.
 
 ## Scope
 
