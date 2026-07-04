@@ -74,8 +74,12 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 
 | Lane | Source | Destination | Status |
 |------|--------|-------------|--------|
+| HIGH browser_extension | `...\browser_extension_assets` | `high_confidence_junk\browser_extension_assets` | Execute verified (1,280) |
+| HIGH theme_assets | `...\theme_assets` | `high_confidence_junk\theme_assets` | Execute verified (51) |
 | GIF | `...\images\gif` | `medium_review\gif` | Execute `20260703` verified (28) |
-| CSV | `...\data\csv` | `medium_review\csv` | DryRun ready (24) |
+| CSV | `...\data\csv` | `medium_review\csv` | Execute `20260704` verified (24) |
+
+**05_DELETE_REVIEW total:** 1,383 files. Remaining **04_DUPLICATES_STAGED:** 94 files (~227 MB) — mostly `mail\pst` (66, HOLD) plus Suns/PNG leftovers.
 
 Build plans:
 
@@ -91,7 +95,7 @@ Build plans:
   -LaneProfile CsvMedium
 ```
 
-Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. PST lane (66 files) remains HOLD.
+Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. **Next:** PST/mail policy review or Suns/PNG leftover inventory — no hard delete recommended.
 
 ## Parked final-delete tool
 

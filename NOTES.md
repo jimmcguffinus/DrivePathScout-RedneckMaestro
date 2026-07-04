@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** CSV medium-review move DryRun ready (`approved_csv_delete_review_move_plan_20260704.csv`, 24 files → `medium_review\csv`). GIF Execute `20260703` verified (28 files). **Do not run CSV `-Execute` without Jim approval of exact plan hash.** PST lane (66 files) remains HOLD.
+**Safe next step:** CSV medium-review Execute `20260704` completed and verified (24 files → `medium_review\csv`). **05_DELETE_REVIEW** now holds 1,383 files across four lanes. Remaining staged: **PST** (66, HOLD) and Suns/PNG leftovers (~28). Recommend PST/mail policy review or Suns/PNG inventory next — no hard delete.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 
