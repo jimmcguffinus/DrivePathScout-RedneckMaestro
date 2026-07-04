@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move Execute hardening (MOVE-only; full execute preflight; mandatory inventory coupling; `-Execute` not approved); `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
+**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 GIF medium-review move; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
 
-Routed move Execute batch `20260703-221211` completed: 1,383 staged duplicates moved and verified. v0.2.2 hardens delete-review MOVE into `05_DELETE_REVIEW` with execute preflight and inventory coupling — no hard delete. Delete-review move Execute remains blocked pending Codex re-review and Jim approval.
+Delete-review HIGH lane Execute `20260703-221211` completed (1,331 verified). GIF medium-review DryRun ready (28 files). GIF `-Execute` blocked pending Jim approval of plan hash `4DED168E…`.
 
 ## 3. Hash Scout built
 

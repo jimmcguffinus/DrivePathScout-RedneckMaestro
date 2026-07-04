@@ -70,14 +70,19 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 
 `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files. v0.2.2 adds full execute preflight before any `Move-Item` and mandatory inventory coupling (fail-closed; not transactionally atomic after external I/O failure).
 
+`Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 extends the same safety model for additional workbench lanes. **GIF medium-review pilot** moves staged GIF duplicates from `04_DUPLICATES_STAGED\...\images\gif` into `05_DELETE_REVIEW\medium_review\gif`. Build the approved plan with `New-ApprovedGifReviewMovePlan.ps1`, then DryRun:
+
 ```powershell
-.\Move-StagedDuplicatesToDeleteReview.ps1 `
+.\New-ApprovedGifReviewMovePlan.ps1
+
+.\Move-StagedWorkbenchLaneToReview.ps1 `
   -InventoryCsvPath "C:\Users\jim\Desktop\DrivePathInventory\staged_duplicate_inventory_20260703-221211.csv" `
-  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_high_confidence_delete_review_move_plan_20260703-221211.csv" `
-  -ExpectedApprovedReviewMovePlanHash "<sha256>"
+  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_gif_delete_review_move_plan_20260703.csv" `
+  -ExpectedApprovedReviewMovePlanHash "<sha256>" `
+  -LaneProfile GifMedium
 ```
 
-Source lanes: `04_DUPLICATES_STAGED\...\browser_extension_assets` and `theme_assets`. Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. Delete-review move `-Execute` is not authorized.
+GIF delete-review `-Execute` requires Jim approval of the exact plan hash. Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths.
 
 ## Parked final-delete tool
 
