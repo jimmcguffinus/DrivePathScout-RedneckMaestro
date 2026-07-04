@@ -64,7 +64,20 @@ When the scan finishes, send `chat_context_paths_TIMESTAMP.md` back to ChatGPT S
   -Limit 10
 ```
 
-v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join containment checks inside approved `DestinationRoot`. v0.1.7 adds `-ApprovedBatchPlan` routed batch targeting with per-path destination subfolders and `-ExpectedApprovedBatchPlanHash`. v0.1.6 adds `-ExpectedPathListHash` list-content binding and an all-or-nothing batch Execute readiness gate for `-OnlyRecoveredPathList`. DryRun planning and the Execute code passed Codex Sparky review. Jim authorized one exact-target pilot on 2026-07-03; it moved and verified one Suns PNG successfully. That authorization is consumed. No second file, batch/full Execute, copy, delete, or cleanup operation is authorized. v0.1 approved recovered move sources remain limited to `I:\recover\`.
+v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join containment checks inside approved `DestinationRoot`. Routed batch Execute `20260703-221211` moved 1,383 staged duplicates with full verification.
+
+## Staged duplicate delete planner
+
+`Remove-StagedDuplicateCandidates.ps1` v0.2.0 plans deletion of **already-staged** HIGH-confidence duplicate files only. Default mode is DryRun — it does not delete, move, copy, or rename files.
+
+```powershell
+.\Remove-StagedDuplicateCandidates.ps1 `
+  -InventoryCsvPath "C:\Users\jim\Desktop\DrivePathInventory\staged_duplicate_inventory_20260703-221211.csv" `
+  -ApprovedDeletePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_high_confidence_delete_plan_20260703-221211.csv" `
+  -ExpectedApprovedDeletePlanHash "<sha256>"
+```
+
+Approved delete scope: only files under `images\png\browser_extension_assets` and `images\png\theme_assets` inside `I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED\recovered_to_realname`. Never deletes keepers, `I:\recover\`, or `I:\1tbrecover\` paths. Delete `-Execute` is not authorized.
 
 ## Scope
 

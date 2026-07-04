@@ -1,8 +1,8 @@
 # Move-RecoveredToRealnameMatches.ps1 — Staging Design Spec
 
-**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8. **DryRun planning passed** Codex Sparky review. **Execute remains blocked** pending v0.1.8 routing safety re-review and Jim approval.
+**Status:** Implementation exists as `Move-RecoveredToRealnameMatches.ps1` v0.1.0-v0.1.8 and `Remove-StagedDuplicateCandidates.ps1` v0.2.0. Move staging Execute completed for routed batch `20260703-221211`. **Delete planner DryRun only** — delete Execute blocked pending Codex review and Jim approval.
 
-**Version:** v0.1.8 (routed destination validation hardening; `-Execute` still not approved)
+**Version:** v0.2.0 staged duplicate delete planner (DryRun only; `-Execute` not approved for deletes)
 
 **Date:** 2026-07-03
 
@@ -421,6 +421,14 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.0:**
+
+- `Remove-StagedDuplicateCandidates.ps1` — staged duplicate delete planner (DryRun default).
+- Deletes only files under approved HIGH-confidence folders: `images\png\browser_extension_assets`, `images\png\theme_assets`.
+- Requires `-ApprovedDeletePlan` + `-ExpectedApprovedDeletePlanHash` (required on `-Execute`).
+- All-or-nothing batch validation before any `Remove-Item`; exact `-LiteralPath` only; no wildcards, recursion, or directory deletes.
+- Never deletes keeper files, `I:\recover\`, or `I:\1tbrecover\` paths.
+
 **Resolved in v0.1.8:**
 
 - `DestinationSubfolder` validation splits path segments and rejects `[IO.Path]::GetInvalidFileNameChars()`, empty segments, `.`, `..`, rooted/drive-qualified paths, and alternate-separator tricks.
@@ -474,5 +482,7 @@ Do **not** implement or use:
 | Codex Sparky Execute code review | **Passed** for exact-target technical readiness |
 | One-file exact-target pilot | **Passed** — one Suns PNG moved and verified on 2026-07-03 |
 | Pilot authorization | **Consumed** — applied to that one source path only |
-| Any further `-Execute` | **Not authorized** — requires new explicit Jim approval |
-| Batch/full staging, copy, delete, or cleanup | **Not authorized** |
+| `Remove-StagedDuplicateCandidates.ps1` v0.2.0 DryRun delete planner | Done |
+| Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
+| Delete Execute (`Remove-StagedDuplicateCandidates.ps1 -Execute`) | **Not authorized** |
+| Batch/full staging, copy, delete cleanup beyond approved planner DryRun | **Not authorized** |
