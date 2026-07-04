@@ -87,7 +87,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 
 **Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 GIF medium-review move; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move; `Remove-StagedDuplicateCandidates.ps1` v0.2.0 parked as final-delete tool only
 
-Delete-review HIGH lane Execute `20260703-221211` completed (1,331 verified). GIF medium-review DryRun ready (28 files). GIF `-Execute` blocked pending Jim approval of plan hash `4DED168E…`.
+Delete-review HIGH lane Execute `20260703-221211` completed (1,331 verified). **GIF medium-review Execute `20260703` completed (28 verified)** → `05_DELETE_REVIEW\medium_review\gif`. MOVE-only; no hard delete, no copy, no keeper movement. Remaining staged lanes: CSV (24), PST (66, HOLD), PNG/Suns leftovers.
 
 ## 3. Hash Scout built
 

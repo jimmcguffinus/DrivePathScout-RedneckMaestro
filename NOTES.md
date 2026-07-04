@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** GIF delete-review move DryRun available (`approved_gif_delete_review_move_plan_20260703.csv`, 28 files). **Do not run GIF or other delete-review `-Execute` without Jim approval of exact plan hash.** PST lane remains HOLD.
+**Safe next step:** GIF medium-review move Execute `20260703` completed and verified (28 files → `05_DELETE_REVIEW\medium_review\gif`). Remaining staged lanes: **CSV** (24), **PST** (66, HOLD), plus scattered PNG/Suns leftovers. No hard delete. Next lane planning requires new approved plan + Jim approval per operation.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 

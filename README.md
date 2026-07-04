@@ -70,7 +70,7 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 
 `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files. v0.2.2 adds full execute preflight before any `Move-Item` and mandatory inventory coupling (fail-closed; not transactionally atomic after external I/O failure).
 
-`Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 extends the same safety model for additional workbench lanes. **GIF medium-review pilot** moves staged GIF duplicates from `04_DUPLICATES_STAGED\...\images\gif` into `05_DELETE_REVIEW\medium_review\gif`. Build the approved plan with `New-ApprovedGifReviewMovePlan.ps1`, then DryRun:
+`Move-StagedWorkbenchLaneToReview.ps1` v0.2.3 extends the same safety model for additional workbench lanes. **GIF medium-review** moves staged GIF duplicates from `04_DUPLICATES_STAGED\...\images\gif` into `05_DELETE_REVIEW\medium_review\gif`. Execute batch `20260703` moved **28** files (MovedVerified=28, MoveFailed=0). Build plans with `New-ApprovedGifReviewMovePlan.ps1`:
 
 ```powershell
 .\New-ApprovedGifReviewMovePlan.ps1
@@ -82,7 +82,7 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
   -LaneProfile GifMedium
 ```
 
-GIF delete-review `-Execute` requires Jim approval of the exact plan hash. Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths.
+MOVE-only grouping for human review — not hard delete. Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. Remaining staged lanes: CSV, PST (hold), PNG/Suns leftovers.
 
 ## Parked final-delete tool
 
