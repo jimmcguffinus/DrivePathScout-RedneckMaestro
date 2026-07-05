@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move
+- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move
 
 **Meaning:**
 
@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** v0.2.6 PST human-review Execute **verified** (66 files → `06_HUMAN_REVIEW\mail\pst_duplicates`). **04_DUPLICATES_STAGED cleared** (0 files; empty directory scaffolding only). Workbench board: 02_KEEPERS_REVIEW (15 PST), 05_DELETE_REVIEW (1,411), 06_HUMAN_REVIEW (66 PST). No hard delete. Recommend human review of delete-review and human-review lanes — no auto-delete.
+**Safe next step:** v0.2.7 Phase 2 BMP medium-review move plan **DryRun verified** (1,619 files → `05_DELETE_REVIEW\medium_review\images\bmp`; 83,160,210 bytes). **HUMAN_REVIEW_IMAGE_BMP (4,406 files) HOLD** under `I:\recover\BMPs`. Execute blocked pending Jim approval of exact plan hash. Prior: v0.2.6 PST human-review Execute verified (66 files). **04_DUPLICATES_STAGED cleared** (0 files). No hard delete.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 

@@ -70,7 +70,7 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 
 `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 plans **MOVE-only** grouping of HIGH-confidence staged duplicate junk into `I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW\high_confidence_junk\` for human review. Default mode is DryRun — it does not delete, copy, or rename files. v0.2.2 adds full execute preflight before any `Move-Item` and mandatory inventory coupling (fail-closed; not transactionally atomic after external I/O failure).
 
-`Move-StagedWorkbenchLaneToReview.ps1` v0.2.6 extends the lane mover with **`PstHumanReview`**, **`SunsPngMedium`**, **`CsvMedium`**, and **`GifMedium`** profiles. MOVE-only grouping for human review — not hard delete.
+`Move-StagedWorkbenchLaneToReview.ps1` v0.2.7 extends the lane mover with **`Phase2BmpMediumReview`**, **`PstHumanReview`**, **`SunsPngMedium`**, **`CsvMedium`**, and **`GifMedium`** profiles. MOVE-only grouping for human review — not hard delete.
 
 | Lane | Source | Destination | Status |
 |------|--------|-------------|--------|
@@ -80,8 +80,9 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 | CSV | `...\data\csv` | `05_DELETE_REVIEW\medium_review\csv` | Execute verified (24) |
 | Suns/PNG | flat under `recovered_to_realname` | `05_DELETE_REVIEW\medium_review\suns_png` | Execute verified (28) |
 | PST | `...\mail\pst` | `06_HUMAN_REVIEW\mail\pst_duplicates` | Execute verified (66) |
+| Phase 2 BMP | `I:\recover\BMPs` (medium-review only) | `05_DELETE_REVIEW\medium_review\images\bmp` | DryRun verified (1,619) — Execute blocked |
 
-**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 1,411 files / 35,731,729 bytes. **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged).
+**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 1,411 files / 35,731,729 bytes. **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged). **Phase 2 BMP human-review:** 4,406 files HOLD under `I:\recover\BMPs`.
 
 Build plans:
 
@@ -90,6 +91,14 @@ Build plans:
 .\New-ApprovedCsvReviewMovePlan.ps1
 .\New-ApprovedSunsPngReviewMovePlan.ps1
 .\New-ApprovedPstHumanReviewMovePlan.ps1
+.\New-ApprovedPhase2BmpMediumReviewMovePlan.ps1
+
+# Phase 2 BMP medium-review DryRun example (MEDIUM_REVIEW_IMAGES_BMP only)
+.\Move-StagedWorkbenchLaneToReview.ps1 `
+  -InventoryCsvPath "C:\Users\jim\Desktop\DrivePathInventory\phase2_bmp_duplicate_inventory_20260704.csv" `
+  -ApprovedReviewMovePlan "C:\Users\jim\Desktop\DrivePathInventory\approved_phase2_bmp_medium_review_move_plan_20260704.csv" `
+  -ExpectedApprovedReviewMovePlanHash "<sha256>" `
+  -LaneProfile Phase2BmpMediumReview
 
 # PST human-review DryRun example
 .\Move-StagedWorkbenchLaneToReview.ps1 `
@@ -99,7 +108,7 @@ Build plans:
   -LaneProfile PstHumanReview
 ```
 
-Never moves keepers, `I:\recover\`, or `I:\1tbrecover\` paths. All lane Execute operations verified. Staging lane cleared.
+Never moves keepers or `I:\1tbrecover\` paths. Staged-lane profiles never move `I:\recover\` except **`Phase2BmpMediumReview`**, which moves only approved `MEDIUM_REVIEW_IMAGES_BMP` rows from `I:\recover\BMPs`. All prior lane Execute operations verified. Staging lane cleared.
 
 ## Parked final-delete tool
 

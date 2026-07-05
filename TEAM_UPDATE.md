@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH
+**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH
 
-HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28), PST (66) Execute verified. **04_DUPLICATES_STAGED:** 0 files (cleared). **06_HUMAN_REVIEW:** 66 PST duplicates. MOVE-only; no hard delete, no copy, no keeper movement, no PST opened.
+HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28), PST (66) Execute verified. Phase 2 BMP medium-review DryRun (1,619) verified; human-review BMPs (4,406) HOLD. **04_DUPLICATES_STAGED:** 0 files (cleared). **06_HUMAN_REVIEW:** 66 PST duplicates. MOVE-only; no hard delete, no copy, no keeper movement, no PST opened.
 
 ## 3. Hash Scout built
 
