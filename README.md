@@ -81,9 +81,9 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 | Suns/PNG | flat under `recovered_to_realname` | `05_DELETE_REVIEW\medium_review\suns_png` | Execute verified (28) |
 | PST | `...\mail\pst` | `06_HUMAN_REVIEW\mail\pst_duplicates` | Execute verified (66) |
 | Phase 2 BMP | `I:\recover\BMPs` (medium-review only) | `05_DELETE_REVIEW\medium_review\images\bmp` | Execute verified (1,619) |
-| Phase 2 web-assets Tier1 | `I:\recover\McNASBackup` (Tier1 KEEP only) | `05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\...` | DryRun ready (16,708) |
+| Phase 2 web-assets Tier1 | `I:\recover\McNASBackup` (Tier1 KEEP only) | `05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\...` | Execute verified (16,708) |
 
-**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 3,030 files (~119.5 MB incl. Phase 2 BMP medium-review). **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged). **Phase 2 BMP human-review:** 4,406 files HOLD under `I:\recover\BMPs` (untouched).
+**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 19,738 files (~2.77 GB incl. Phase 2 web-assets Tier1 + BMP medium-review). **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged). **Phase 2 BMP human-review:** 4,406 files HOLD under `I:\recover\BMPs` (untouched). **Phase 2 web-assets HOLD:** PDFs, Office docs, shared-human hashes, Tier2 unclear, human-review escalations remain under `I:\recover\McNASBackup`.
 
 Build plans:
 
@@ -117,7 +117,9 @@ Build plans:
   -LaneProfile PstHumanReview
 ```
 
-Never moves keepers or `I:\1tbrecover\` paths. Staged-lane profiles never move `I:\recover\` except **`Phase2BmpMediumReview`**, which moves only approved `MEDIUM_REVIEW_IMAGES_BMP` rows from `I:\recover\BMPs`. Phase 2 BMP medium-review Execute verified (1,619 moved; 4,406 human-review BMPs remain in recover). A later accidental rerun aborted at batch validation (`StagedMissing`) before any `Move-Item`. All lane Execute operations verified. Staging lane cleared.
+Never moves keepers or `I:\1tbrecover\` paths. Staged-lane profiles never move `I:\recover\` except **`Phase2BmpMediumReview`** and **`Phase2WebAssetsTier1`**, which move only approved rows from `I:\recover\BMPs` and Tier1 KEEP web-assets from `I:\recover\McNASBackup` respectively. Phase 2 web-assets Tier1 Execute verified (16,708 moved; 2,472,457,276 bytes; verification receipt `phase2_web_assets_tier1_move_verification_20260704.txt`). Phase 2 BMP medium-review Execute verified (1,619 moved; 4,406 human-review BMPs remain in recover). A later accidental BMP Execute rerun aborted at batch validation (`StagedMissing`) before any `Move-Item`. All lane Execute operations verified. Staging lane cleared.
+
+**Next aggressive read-only target:** McNASBackup video duplicate inventory (`Build-Phase2McNasBackupVideoDuplicateInventory.ps1`) — classification only; no move plan yet.
 
 ## Parked final-delete tool
 

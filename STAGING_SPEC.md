@@ -421,6 +421,12 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.8 (execute verified):**
+
+- Phase 2 web-assets Tier1 Execute **verified** — 16,708 files moved to `05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\` (16,651 obvious web junk + 57 tool archives; 2,472,457,276 bytes).
+- Verification receipt: `phase2_web_assets_tier1_move_verification_20260704.txt`; workbench snapshot: `workbench_after_phase2_web_assets_snapshot_20260704.csv`.
+- **HOLD:** PDFs, Office docs, shared-human hashes, human-review escalations, Tier2 unclear rows remain under `I:\recover\McNASBackup`.
+
 **Resolved in v0.2.8:**
 
 - `Move-StagedWorkbenchLaneToReview.ps1` — added `Phase2WebAssetsTier1` lane profile (`I:\recover\McNASBackup` Tier1 KEEP → `05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\`).
@@ -536,6 +542,7 @@ Do **not** implement or use:
 | Pilot authorization | **Consumed** — applied to that one source path only |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
 | `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move DryRun + execute preflight hardening | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 move Execute | **Done** — 16,708 verified |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 move DryRun | Done |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.7 Phase 2 BMP medium-review move DryRun | Done |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.6 PST human-review move DryRun | Done |
