@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 + v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH
+**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.9 McNASBackup video move-extras + v0.2.8 Phase 2 web-assets Tier1 + v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH
 
-HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28), PST (66), Phase 2 BMP medium-review (1,619), Phase 2 web-assets Tier1 (16,708) Execute verified. Human-review BMPs (4,406) HOLD under `I:\recover\BMPs`. Web-assets HOLD: PDFs, Office docs, shared-human hashes, Tier2 unclear, human escalations under `I:\recover\McNASBackup`. Accidental BMP Execute rerun aborted at batch validation (`StagedMissing`; no movement). **04_DUPLICATES_STAGED:** 0 files (cleared). **06_HUMAN_REVIEW:** 66 PST duplicates. **05_DELETE_REVIEW:** 19,738 files after Phase 2 web-assets + BMP moves. MOVE-only; no hard delete, no copy, no keeper movement, no PST opened.
+HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28), PST (66), Phase 2 BMP medium-review (1,619), Phase 2 web-assets Tier1 (16,708) Execute verified. Phase 2 McNASBackup video move-extras DryRun plan ready (650 extras / ~36.4 GB; keeper stays). Video HOLD: sample-first (294 groups), medium (4), low-risk (1). Human-review BMPs (4,406) HOLD under `I:\recover\BMPs`. Web-assets HOLD: PDFs, Office docs, shared-human hashes, Tier2 unclear, human escalations under `I:\recover\McNASBackup`. Video Execute blocked pending Jim approval.
 
 ## 3. Hash Scout built
 
