@@ -23,19 +23,20 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$RunStamp,
 
-    [ValidateSet('GifMedium', 'CsvMedium', 'SunsPngMedium', 'PstHumanReview', 'Phase2BmpMediumReview')]
+    [ValidateSet('GifMedium', 'CsvMedium', 'SunsPngMedium', 'PstHumanReview', 'Phase2BmpMediumReview', 'Phase2WebAssetsTier1')]
     [string]$LaneProfile = 'GifMedium',
 
     [switch]$Execute
 )
 
-# Workbench Lane Review Move Planner v0.2.7
+# Workbench Lane Review Move Planner v0.2.8
 # MOVE staged duplicate files from an approved workbench lane into review roots. Default is DryRun.
 # LaneProfile GifMedium:            04_DUPLICATES_STAGED\...\images\gif -> 05_DELETE_REVIEW\medium_review\gif
 # LaneProfile CsvMedium:             04_DUPLICATES_STAGED\...\data\csv   -> 05_DELETE_REVIEW\medium_review\csv
 # LaneProfile SunsPngMedium:         04_DUPLICATES_STAGED\...\recovered_to_realname (flat PNG) -> medium_review\suns_png
 # LaneProfile PstHumanReview:        04_DUPLICATES_STAGED\...\mail\pst -> 06_HUMAN_REVIEW\mail\pst_duplicates
 # LaneProfile Phase2BmpMediumReview: I:\recover\BMPs (MEDIUM_REVIEW_IMAGES_BMP only) -> 05_DELETE_REVIEW\medium_review\images\bmp
+# LaneProfile Phase2WebAssetsTier1:  I:\recover\McNASBackup (Tier1 KEEP web junk + tool archives) -> 05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\*
 # Full execute preflight eliminates predictable per-row blockers before the first Move-Item.
 # Not transactionally atomic after external I/O failure; manifest-based recovery may be required.
 # No Remove-Item. No Copy-Item. No Rename-Item. Never moves keeper files or I:\recover / I:\1tbrecover sources.
@@ -62,6 +63,7 @@ function Initialize-LaneProfile {
     $script:UsesPhase2RecoverSource = $false
     $script:Phase2RecoverSourceRoot = ''
     $script:WorkbenchExcludeRoots = @()
+    $script:AllowedFileExtensions = @()
     switch ($Profile) {
         'GifMedium' {
             $script:ApprovedStagedSourceRoots = @(
@@ -141,10 +143,51 @@ function Initialize-LaneProfile {
                 'I:\_RECOVERY_WORKBENCH\06_HUMAN_REVIEW'
             )
         }
+        'Phase2WebAssetsTier1' {
+            $script:UsesPhase2RecoverSource = $true
+            $script:Phase2RecoverSourceRoot = 'I:\recover\McNASBackup'
+            $script:StagedDuplicatesRoot = 'I:\recover\McNASBackup'
+            $script:ApprovedStagedSourceRoots = @('I:\recover\McNASBackup')
+            $script:ApprovedSourceSubfolders = @(
+                'high_confidence_junk\phase2_web_assets\obvious_web_junk',
+                'high_confidence_junk\phase2_web_assets\tool_cache_archives'
+            )
+            $script:ReviewLaneBySourceSubfolder = @{
+                'high_confidence_junk\phase2_web_assets\obvious_web_junk' = 'high_confidence_junk\phase2_web_assets\obvious_web_junk'
+                'high_confidence_junk\phase2_web_assets\tool_cache_archives' = 'high_confidence_junk\phase2_web_assets\tool_cache_archives'
+            }
+            $script:AllowedFileExtensions = @('.gif', '.png', '.tif', '.zip')
+            $script:RequiredFileExtension = '.gif'
+            $script:DeniedSourceSubfolderPatterns = @()
+            $script:DeniedMoveSourcePrefixes = @()
+            $script:RequiredReviewConfidence = 'HIGH'
+            $script:ReportNamePrefix = 'phase2_web_assets_tier1_move'
+            $script:InventoryCouplingMode = 'Phase2WebAssetsRefinement'
+            $script:RequiresKeeperVerification = $false
+            $script:RequiresFlatStagedRoot = $false
+            $script:PlanSourcePathColumn = 'SourcePath'
+            $script:PlanDestinationPathColumn = 'ReviewPath'
+            $script:ForbiddenDestinationRoots = @('I:\_RECOVERY_WORKBENCH\06_HUMAN_REVIEW')
+            $script:WorkbenchExcludeRoots = @(
+                'I:\_RECOVERY_WORKBENCH\02_KEEPERS_REVIEW',
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED',
+                'I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW',
+                'I:\_RECOVERY_WORKBENCH\06_HUMAN_REVIEW'
+            )
+        }
         default {
             throw "Unsupported LaneProfile: $Profile"
         }
     }
+}
+
+function Test-AllowedMoveExtension {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $ext = [IO.Path]::GetExtension($Path).ToLowerInvariant()
+    if ($script:AllowedFileExtensions -and $script:AllowedFileExtensions.Count -gt 0) {
+        return $script:AllowedFileExtensions -contains $ext
+    }
+    return $ext -eq $script:RequiredFileExtension
 }
 
 Initialize-LaneProfile -Profile $LaneProfile
@@ -476,8 +519,9 @@ function Read-ApprovedReviewMovePlan {
         if ($confidence -ne $script:RequiredReviewConfidence) {
             throw "Approved review move plan row is not $($script:RequiredReviewConfidence) confidence: $stagedPath"
         }
-        if ([IO.Path]::GetExtension($stagedPath).ToLowerInvariant() -ne $script:RequiredFileExtension) {
-            throw "Approved review move plan staged path is not $($script:RequiredFileExtension): $stagedPath"
+        if (-not (Test-AllowedMoveExtension -Path $stagedPath)) {
+            $extLabel = if ($script:AllowedFileExtensions.Count -gt 0) { ($script:AllowedFileExtensions -join ',') } else { $script:RequiredFileExtension }
+            throw "Approved review move plan staged path has disallowed extension ($extLabel): $stagedPath"
         }
         foreach ($denied in $script:DeniedSourceSubfolderPatterns) {
             if ($subfolder -eq $denied -or $stagedPath -like "*\$denied\*") {
@@ -494,12 +538,33 @@ function Read-ApprovedReviewMovePlan {
             if (Test-PathUnderWorkbenchExclude -Path $stagedPath) {
                 throw "Approved review move plan source path is under workbench exclude root: $stagedPath"
             }
-            if ($row.PSObject.Properties.Name -contains 'IsPhotoLikeBmp' -and $row.IsPhotoLikeBmp -eq 'True') {
-                throw "Approved review move plan row is photo-like BMP (human review hold): $stagedPath"
+            if ($script:InventoryCouplingMode -eq 'Phase2BmpInventory') {
+                if ($row.PSObject.Properties.Name -contains 'IsPhotoLikeBmp' -and $row.IsPhotoLikeBmp -eq 'True') {
+                    throw "Approved review move plan row is photo-like BMP (human review hold): $stagedPath"
+                }
+                if ($row.PSObject.Properties.Name -contains 'NonSelectedSameHashCount' -and
+                    [int]$row.NonSelectedSameHashCount -lt 1) {
+                    throw "Approved review move plan row would move all copies of hash group: $stagedPath"
+                }
             }
-            if ($row.PSObject.Properties.Name -contains 'NonSelectedSameHashCount' -and
-                [int]$row.NonSelectedSameHashCount -lt 1) {
-                throw "Approved review move plan row would move all copies of hash group: $stagedPath"
+            if ($script:InventoryCouplingMode -eq 'Phase2WebAssetsRefinement') {
+                if ($row.PSObject.Properties.Name -contains 'SharedHashWithHumanReview' -and
+                    $row.SharedHashWithHumanReview -eq 'True') {
+                    throw "Approved review move plan row shares hash with human review lane: $stagedPath"
+                }
+                if ($row.PSObject.Properties.Name -contains 'SpotCheckDecision' -and
+                    $row.SpotCheckDecision.Trim() -ne 'KEEP_TIER1_MOVE_CANDIDATE') {
+                    throw "Approved review move plan row is not KEEP_TIER1_MOVE_CANDIDATE: $stagedPath"
+                }
+                if ($row.PSObject.Properties.Name -contains 'RefinedPolicyLane') {
+                    $planLane = $row.RefinedPolicyLane.Trim()
+                    if ($planLane -notin @('TIER1_OBVIOUS_WEB_JUNK', 'TIER1_TOOL_CACHE_ARCHIVES')) {
+                        throw "Approved review move plan row has non-Tier1 refined lane '$planLane': $stagedPath"
+                    }
+                }
+                if ($row.PSObject.Properties.Name -contains 'PersonalSignal' -and $row.PersonalSignal -eq 'True') {
+                    throw "Approved review move plan row has personal signal: $stagedPath"
+                }
             }
         }
         else {
@@ -643,6 +708,26 @@ function Get-InventoryIndex {
                     DestinationSubfolder = $row.SuggestedDestinationSubfolder.Trim()
                     SuggestedPolicyLane  = $row.SuggestedPolicyLane.Trim()
                     IsPhotoLikeBmp       = $row.IsPhotoLikeBmp
+                    Extension            = $row.Extension.ToLowerInvariant()
+                    ReviewReason         = $row.ReviewReason.Trim()
+                }
+            }
+        }
+        elseif ($script:InventoryCouplingMode -eq 'Phase2WebAssetsRefinement') {
+            $key = (Get-NormalizedPath $row.FullName).ToUpperInvariant()
+            if ([string]::IsNullOrWhiteSpace($key)) { continue }
+            if ($index.ContainsKey($key)) {
+                [void]$duplicatePaths.Add($row.FullName)
+            }
+            else {
+                $index[$key] = [pscustomobject]@{
+                    FullName             = Get-NormalizedPath $row.FullName
+                    Hash                 = Get-NormalizedHash $row.Hash
+                    SizeBytes            = $row.SizeBytes
+                    DestinationSubfolder = $row.SuggestedDestinationSubfolder.Trim()
+                    RefinedPolicyLane    = $row.RefinedPolicyLane.Trim()
+                    PersonalSignal       = $row.PersonalSignal
+                    Extension            = $row.Extension.ToLowerInvariant()
                     ReviewReason         = $row.ReviewReason.Trim()
                 }
             }
@@ -756,6 +841,28 @@ function Get-PlanInventoryCouplingIssues {
         }
         return @($issues)
     }
+    if ($script:InventoryCouplingMode -eq 'Phase2WebAssetsRefinement') {
+        if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
+            [void]$issues.Add('InventoryHashMismatch')
+        }
+        if ([int64]$InventoryRow.SizeBytes -ne [int64]$PlanRow.SizeBytes) {
+            [void]$issues.Add('InventorySizeMismatch')
+        }
+        if ($InventoryRow.DestinationSubfolder.Trim() -ne $PlanRow.DestinationSubfolder) {
+            [void]$issues.Add('InventorySubfolderMismatch')
+        }
+        if ($InventoryRow.RefinedPolicyLane -notin @('TIER1_OBVIOUS_WEB_JUNK', 'TIER1_TOOL_CACHE_ARCHIVES')) {
+            [void]$issues.Add('InventoryPolicyLaneMismatch')
+        }
+        if ($InventoryRow.PersonalSignal -eq 'True') {
+            [void]$issues.Add('InventoryPersonalSignal')
+        }
+        if ($script:AllowedFileExtensions.Count -gt 0 -and
+            $script:AllowedFileExtensions -notcontains $InventoryRow.Extension.ToLowerInvariant()) {
+            [void]$issues.Add('InventoryExtensionRejected')
+        }
+        return @($issues)
+    }
     if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
         [void]$issues.Add('InventoryHashMismatch')
     }
@@ -820,6 +927,14 @@ function Test-InventoryRowEligible {
             $Row.IsPhotoLikeBmp -ne 'True'
         )
     }
+    if ($script:InventoryCouplingMode -eq 'Phase2WebAssetsRefinement') {
+        return (
+            $Row.RefinedPolicyLane -in @('TIER1_OBVIOUS_WEB_JUNK', 'TIER1_TOOL_CACHE_ARCHIVES') -and
+            $script:ApprovedSourceSubfolders -contains $Row.DestinationSubfolder -and
+            $Row.PersonalSignal -ne 'True' -and
+            ($script:AllowedFileExtensions.Count -eq 0 -or $script:AllowedFileExtensions -contains $Row.Extension.ToLowerInvariant())
+        )
+    }
     return (
         $Row.DeleteConfidence -eq $script:RequiredReviewConfidence -and
         $Row.MoveStatus -in $script:VerifiedMoveStatuses -and
@@ -875,7 +990,7 @@ function Test-ReviewMoveCandidateLive {
             [void]$issues.Add('DeniedPrefixStaged')
         }
     }
-    if ([IO.Path]::GetExtension($stagedPath).ToLowerInvariant() -ne $script:RequiredFileExtension) {
+    if (-not (Test-AllowedMoveExtension -Path $stagedPath)) {
         [void]$issues.Add('WrongExtension')
     }
     $planConfidence = $PlanRow.ReviewConfidence
@@ -1030,7 +1145,7 @@ function Test-ExecutePreflightRow {
             [void]$issues.Add('DeniedPrefixStaged')
         }
     }
-    if ([IO.Path]::GetExtension($stagedPath).ToLowerInvariant() -ne $script:RequiredFileExtension) {
+    if (-not (Test-AllowedMoveExtension -Path $stagedPath)) {
         [void]$issues.Add('WrongExtension')
     }
     if (-not (Test-PathInsideRoot -ChildPath $plannedDest -RootPath $DeleteReviewRoot)) {
@@ -1201,7 +1316,7 @@ $inventoryData = Get-InventoryIndex -Path $InventoryCsvPath
 $planReadResult = Read-ApprovedReviewMovePlan -PlanPath $ApprovedReviewMovePlan -DeleteReviewRoot $deleteReviewRootNormalized
 $planEntries = $planReadResult.Entries
 
-Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.7 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
+Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.8 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
 Write-LogLine -Path $logReport -Message "InventoryCsvPath=$InventoryCsvPath"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan=$ApprovedReviewMovePlan"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan_FileSha256=$planFileHash"

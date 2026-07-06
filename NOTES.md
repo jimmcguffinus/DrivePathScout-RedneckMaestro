@@ -100,7 +100,7 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - **Do not move** real-named keeper files unless Jim explicitly approves
 - Use saved hashes and **move manifests** to prove original path, destination path, and content integrity
 - No destructive operation is approved
-- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move
+- **Design spec:** see `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 + v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH delete-review move
 
 **Meaning:**
 

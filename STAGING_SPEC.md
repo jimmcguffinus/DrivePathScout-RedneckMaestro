@@ -421,6 +421,14 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.8:**
+
+- `Move-StagedWorkbenchLaneToReview.ps1` — added `Phase2WebAssetsTier1` lane profile (`I:\recover\McNASBackup` Tier1 KEEP → `05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\`).
+- `New-ApprovedPhase2WebAssetsTier1MovePlan.ps1` — builds plan from `phase2_web_assets_lowrisk_refinement_<stamp>.csv`; **Tier1 KEEP rows only** (obvious web junk + tool/cache archives).
+- `Build-Phase2WebAssetsTier1SpotCheck.ps1` — read-only Tier1 spot-check before move planning.
+- **HOLD:** PDFs, Office docs, unclear Tier2, shared-human hashes, human-review escalations, blockers.
+- Source is Phase 2 McNASBackup recover root; MOVE-only grouping; not hard delete.
+
 **Resolved in v0.2.7:**
 
 - `Move-StagedWorkbenchLaneToReview.ps1` — added `Phase2BmpMediumReview` lane profile (`I:\recover\BMPs` → `05_DELETE_REVIEW\medium_review\images\bmp`).
@@ -528,6 +536,7 @@ Do **not** implement or use:
 | Pilot authorization | **Consumed** — applied to that one source path only |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
 | `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move DryRun + execute preflight hardening | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 move DryRun | Done |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.7 Phase 2 BMP medium-review move DryRun | Done |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.6 PST human-review move DryRun | Done |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.5 Suns/PNG medium-review move Execute | Done |
