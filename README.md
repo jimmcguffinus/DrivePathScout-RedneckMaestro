@@ -80,9 +80,9 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 | CSV | `...\data\csv` | `05_DELETE_REVIEW\medium_review\csv` | Execute verified (24) |
 | Suns/PNG | flat under `recovered_to_realname` | `05_DELETE_REVIEW\medium_review\suns_png` | Execute verified (28) |
 | PST | `...\mail\pst` | `06_HUMAN_REVIEW\mail\pst_duplicates` | Execute verified (66) |
-| Phase 2 BMP | `I:\recover\BMPs` (medium-review only) | `05_DELETE_REVIEW\medium_review\images\bmp` | DryRun verified (1,619) — Execute blocked |
+| Phase 2 BMP | `I:\recover\BMPs` (medium-review only) | `05_DELETE_REVIEW\medium_review\images\bmp` | Execute verified (1,619) |
 
-**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 1,411 files / 35,731,729 bytes. **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged). **Phase 2 BMP human-review:** 4,406 files HOLD under `I:\recover\BMPs`.
+**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 3,030 files (~119.5 MB incl. Phase 2 BMP medium-review). **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged). **Phase 2 BMP human-review:** 4,406 files HOLD under `I:\recover\BMPs` (untouched).
 
 Build plans:
 
@@ -108,7 +108,7 @@ Build plans:
   -LaneProfile PstHumanReview
 ```
 
-Never moves keepers or `I:\1tbrecover\` paths. Staged-lane profiles never move `I:\recover\` except **`Phase2BmpMediumReview`**, which moves only approved `MEDIUM_REVIEW_IMAGES_BMP` rows from `I:\recover\BMPs`. All prior lane Execute operations verified. Staging lane cleared.
+Never moves keepers or `I:\1tbrecover\` paths. Staged-lane profiles never move `I:\recover\` except **`Phase2BmpMediumReview`**, which moves only approved `MEDIUM_REVIEW_IMAGES_BMP` rows from `I:\recover\BMPs`. Phase 2 BMP medium-review Execute verified (1,619 moved; 4,406 human-review BMPs remain in recover). A later accidental rerun aborted at batch validation (`StagedMissing`) before any `Move-Item`. All lane Execute operations verified. Staging lane cleared.
 
 ## Parked final-delete tool
 

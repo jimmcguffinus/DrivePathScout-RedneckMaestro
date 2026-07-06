@@ -323,7 +323,7 @@ Still read-only; no staging/copy/delete.
 
 **Tested:** Hash Scout v0.1.5 balanced sample — Jim run passed (658 hashed, 33 duplicate groups, 16 interesting groups, 1 recovered-to-realname match, read-only confirmed, 00:19:01).
 
-**Safe next step:** v0.2.7 Phase 2 BMP medium-review move plan **DryRun verified** (1,619 files → `05_DELETE_REVIEW\medium_review\images\bmp`; 83,160,210 bytes). **HUMAN_REVIEW_IMAGE_BMP (4,406 files) HOLD** under `I:\recover\BMPs`. Execute blocked pending Jim approval of exact plan hash. Prior: v0.2.6 PST human-review Execute verified (66 files). **04_DUPLICATES_STAGED cleared** (0 files). No hard delete.
+**Safe next step:** v0.2.7 Phase 2 BMP medium-review move **Execute verified** (1,619 files → `05_DELETE_REVIEW\medium_review\images\bmp`; 83,160,210 bytes). **HUMAN_REVIEW_IMAGE_BMP (4,406 files) HOLD** under `I:\recover\BMPs` — untouched. Later accidental Execute rerun aborted safely at `BATCH_VALIDATION_FAILED` (`StagedMissing`; no `Move-Item`). Verification receipt: `phase2_bmp_medium_review_move_verification_20260704.txt`. No hard delete.
 
 #### 6b. Move staging Codex Sparky review (2026-07-03)
 
