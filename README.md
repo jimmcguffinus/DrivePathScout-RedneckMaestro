@@ -82,9 +82,9 @@ v0.1.8 hardens routed `DestinationSubfolder` segment validation and post-join co
 | PST | `...\mail\pst` | `06_HUMAN_REVIEW\mail\pst_duplicates` | Execute verified (66) |
 | Phase 2 BMP | `I:\recover\BMPs` (medium-review only) | `05_DELETE_REVIEW\medium_review\images\bmp` | Execute verified (1,619) |
 | Phase 2 web-assets Tier1 | `I:\recover\McNASBackup` (Tier1 KEEP only) | `05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\...` | Execute verified (16,708) |
-| Phase 2 McNASBackup video extras | `I:\recover\McNASBackup` (MOVE_EXTRAS_READY duplicate extras only) | `06_HUMAN_REVIEW\media\videos\mcnasbackup_duplicate_extras` | DryRun plan ready (650 extras; Execute blocked) |
+| Phase 2 McNASBackup video extras | `I:\recover\McNASBackup` (MOVE_EXTRAS_READY duplicate extras only) | `06_HUMAN_REVIEW\media\videos\mcnasbackup_duplicate_extras` | Execute verified (650) |
 
-**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 19,738 files (~2.77 GB incl. Phase 2 web-assets Tier1 + BMP medium-review). **06_HUMAN_REVIEW:** 66 PST files / 230,307,840 bytes. **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged). **Phase 2 BMP human-review:** 4,406 files HOLD under `I:\recover\BMPs` (untouched). **Phase 2 web-assets HOLD:** PDFs, Office docs, shared-human hashes, Tier2 unclear, human-review escalations remain under `I:\recover\McNASBackup`. **Phase 2 McNASBackup video HOLD:** sample-first (294 groups), medium (4), low-risk (1), and blocked groups remain in recover; only MOVE_EXTRAS_READY duplicate extras (650 files / ~36.4 GB) have an approved human-review move plan — `CandidateKeeperPath` stays in place per hash group.
+**04_DUPLICATES_STAGED:** 0 files (cleared; empty dirs remain). **05_DELETE_REVIEW:** 19,738 files (~2.59 GB incl. Phase 2 web-assets Tier1 + BMP medium-review). **06_HUMAN_REVIEW:** 716 files (~39.3 GB: 650 video duplicate extras + 66 PST). **02_KEEPERS_REVIEW:** 15 PST keeper review copies (unchanged). **Phase 2 BMP human-review:** 4,406 files HOLD under `I:\recover\BMPs` (untouched). **Phase 2 web-assets HOLD:** PDFs, Office docs, shared-human hashes, Tier2 unclear, human-review escalations remain under `I:\recover\McNASBackup`. **Phase 2 McNASBackup video HOLD:** sample-first (294 groups), medium (4), low-risk (1) remain in recover; 650 MOVE_EXTRAS_READY duplicate extras Execute verified (`phase2_mcnasbackup_video_move_extras_verification_20260704.txt`); `CandidateKeeperPath` stayed in place for all 261 moved groups.
 
 Build plans:
 
@@ -126,9 +126,9 @@ Build plans:
   -LaneProfile PstHumanReview
 ```
 
-Never moves keepers or `I:\1tbrecover\` paths. Staged-lane profiles never move `I:\recover\` except **`Phase2BmpMediumReview`**, **`Phase2WebAssetsTier1`**, and **`Phase2McNasBackupVideoExtrasHumanReview`**, which move only approved rows from `I:\recover\BMPs`, Tier1 KEEP web-assets, and MOVE_EXTRAS_READY video duplicate extras from `I:\recover\McNASBackup` respectively. Video move-extras never moves `CandidateKeeperPath`. Phase 2 web-assets Tier1 Execute verified (16,708 moved; 2,472,457,276 bytes; verification receipt `phase2_web_assets_tier1_move_verification_20260704.txt`). Phase 2 BMP medium-review Execute verified (1,619 moved; 4,406 human-review BMPs remain in recover). A later accidental BMP Execute rerun aborted at batch validation (`StagedMissing`) before any `Move-Item`. All lane Execute operations verified. Staging lane cleared.
+Never moves keepers or `I:\1tbrecover\` paths. Staged-lane profiles never move `I:\recover\` except **`Phase2BmpMediumReview`**, **`Phase2WebAssetsTier1`**, and **`Phase2McNasBackupVideoExtrasHumanReview`**, which move only approved rows from `I:\recover\BMPs`, Tier1 KEEP web-assets, and MOVE_EXTRAS_READY video duplicate extras from `I:\recover\McNASBackup` respectively. Video move-extras never moves `CandidateKeeperPath`. Phase 2 McNASBackup video move-extras Execute verified (650 moved; 39,107,870,438 bytes; verification receipt `phase2_mcnasbackup_video_move_extras_verification_20260704.txt`). Phase 2 web-assets Tier1 Execute verified (16,708 moved; 2,472,457,276 bytes). Phase 2 BMP medium-review Execute verified (1,619 moved; 4,406 human-review BMPs remain in recover). All lane Execute operations verified. Staging lane cleared.
 
-**Next aggressive read-only target:** McNASBackup video sample-first review (`HUMAN_REVIEW_SAMPLE_FIRST` — 294 groups / ~52.1 GB extras HOLD). Video Execute remains blocked pending Jim approval and Codex review.
+**Next aggressive read-only target:** McNASBackup video sample-first review (`HUMAN_REVIEW_SAMPLE_FIRST` — 294 groups / ~52.1 GB extras HOLD).
 
 ## Parked final-delete tool
 

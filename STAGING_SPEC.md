@@ -421,13 +421,20 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.2.9 (execute verified):**
+
+- Phase 2 McNASBackup video move-extras Execute **verified** — 650 duplicate extra videos moved to `06_HUMAN_REVIEW\media\videos\mcnasbackup_duplicate_extras` (39,107,870,438 bytes; 00:22:58 elapsed).
+- Verification receipt: `phase2_mcnasbackup_video_move_extras_verification_20260704.txt`; workbench snapshot: `workbench_after_phase2_video_extras_snapshot_20260704.csv`.
+- `CandidateKeeperPath` files remained in `I:\recover\McNASBackup` for all 261 hash groups.
+- **HOLD:** `HUMAN_REVIEW_SAMPLE_FIRST` (294 groups), `MEDIUM_REVIEW_SAMPLE_FIRST` (4), `LOW_RISK_HOLD` (1).
+
 **Resolved in v0.2.9:**
 
 - `Move-StagedWorkbenchLaneToReview.ps1` — added `Phase2McNasBackupVideoExtrasHumanReview` lane profile (`I:\recover\McNASBackup` MOVE_EXTRAS_READY duplicate extras → `06_HUMAN_REVIEW\media\videos\mcnasbackup_duplicate_extras`).
 - `New-ApprovedPhase2McNasBackupVideoMoveExtrasPlan.ps1` — builds plan from keeper-policy sample + video duplicate inventory; **HUMAN_REVIEW_MOVE_EXTRAS_READY groups only** (`NeedsHumanSpotCheck=False`); `CandidateKeeperPath` never moves.
 - `Build-Phase2McNasBackupVideoDuplicateInventory.ps1` + `Build-Phase2McNasBackupVideoKeeperPolicySample.ps1` — read-only McNASBackup video analysis.
 - **HOLD:** `HUMAN_REVIEW_SAMPLE_FIRST` (294 groups), `MEDIUM_REVIEW_SAMPLE_FIRST` (4), `LOW_RISK_HOLD` (1), `BLOCKED_INVESTIGATE` (0).
-- Source is Phase 2 McNASBackup recover root; MOVE-only grouping; not hard delete. Execute blocked pending Jim approval.
+- Source is Phase 2 McNASBackup recover root; MOVE-only grouping; not hard delete. Execute verified (650 moved).
 
 **Resolved in v0.2.8 (execute verified):**
 
@@ -550,8 +557,8 @@ Do **not** implement or use:
 | Pilot authorization | **Consumed** — applied to that one source path only |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
 | `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move DryRun + execute preflight hardening | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.9 McNASBackup video move-extras Execute | **Done** — 650 verified |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.9 McNASBackup video move-extras DryRun | Done — 650 ready |
-| `Move-StagedWorkbenchLaneToReview.ps1` v0.2.9 McNASBackup video move-extras Execute | **Not authorized** |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 move Execute | **Done** — 16,708 verified |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 move DryRun | Done |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.7 Phase 2 BMP medium-review move DryRun | Done |
