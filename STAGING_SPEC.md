@@ -421,6 +421,21 @@ Do **not** implement or use:
 - `-OnlyRecoveredPathList` approved exact-path batch targeting from plain-text file.
 - Rejects incompatible combinations with `-Limit` and `-OnlyRecoveredPath`.
 
+**Resolved in v0.3.0 (execute verified):**
+
+- Phase 2 McNASBackup music human move-extras Execute **verified** — 2,838 duplicate extra audio files moved to `06_HUMAN_REVIEW\media\music\mcnasbackup_duplicate_extras` (9,323,075,199 bytes; 00:08:58 elapsed).
+- Verification receipt: `phase2_mcnasbackup_music_human_move_extras_verification_20260704.txt`; workbench snapshot: `workbench_after_phase2_music_extras_snapshot_20260704.csv`.
+- `CandidateKeeperPath` files remained in `I:\recover\McNASBackup` for all 1,286 hash groups.
+- **HOLD:** `HUMAN_REVIEW_SAMPLE_FIRST` (2,420 groups), `MEDIUM_REVIEW_SAMPLE_FIRST` (2,788), `MEDIUM_REVIEW_MOVE_EXTRAS_READY` (9), `LOW_RISK_HOLD` (29).
+
+**Resolved in v0.3.0:**
+
+- `Move-StagedWorkbenchLaneToReview.ps1` — added `Phase2McNasBackupMusicExtrasHumanReview` lane profile (`I:\recover\McNASBackup` HUMAN_REVIEW_MOVE_EXTRAS_READY duplicate extras → `06_HUMAN_REVIEW\media\music\mcnasbackup_duplicate_extras`).
+- `New-ApprovedPhase2McNasBackupMusicHumanMoveExtrasPlan.ps1` — builds plan from keeper policy + music duplicate inventory; **HUMAN_REVIEW_MOVE_EXTRAS_READY groups only** (`NeedsHumanSpotCheck=False`); `CandidateKeeperPath` never moves.
+- `Build-Phase2McNasBackupMusicDuplicateInventory.ps1` + `Build-Phase2McNasBackupMusicKeeperPolicy.ps1` — read-only McNASBackup music analysis.
+- **HOLD:** `HUMAN_REVIEW_SAMPLE_FIRST` (2,420 groups), `MEDIUM_REVIEW_SAMPLE_FIRST` (2,788), `MEDIUM_REVIEW_MOVE_EXTRAS_READY` (9), `LOW_RISK_HOLD` (29).
+- Source is Phase 2 McNASBackup recover root; MOVE-only grouping; not hard delete. Execute verified (2,838 moved).
+
 **Resolved in v0.2.9 (execute verified):**
 
 - Phase 2 McNASBackup video move-extras Execute **verified** — 650 duplicate extra videos moved to `06_HUMAN_REVIEW\media\videos\mcnasbackup_duplicate_extras` (39,107,870,438 bytes; 00:22:58 elapsed).
@@ -557,6 +572,8 @@ Do **not** implement or use:
 | Pilot authorization | **Consumed** — applied to that one source path only |
 | Routed batch move Execute `20260703-221211` | **Done** — 1,383 moved and verified |
 | `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 delete-review move DryRun + execute preflight hardening | Done |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.3.0 McNASBackup music human move-extras Execute | **Done** — 2,838 verified |
+| `Move-StagedWorkbenchLaneToReview.ps1` v0.3.0 McNASBackup music human move-extras DryRun | Done — 2,838 ready |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.9 McNASBackup video move-extras Execute | **Done** — 650 verified |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.9 McNASBackup video move-extras DryRun | Done — 650 ready |
 | `Move-StagedWorkbenchLaneToReview.ps1` v0.2.8 Phase 2 web-assets Tier1 move Execute | **Done** — 16,708 verified |

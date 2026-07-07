@@ -85,9 +85,9 @@ I:\recover\_duplicates\A94F3C21.file602.Pepe_in_yard.png
 - Use saved hashes and move manifests to prove original path, destination path, and content integrity
 - No destructive operation is approved
 
-**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.2.9 McNASBackup video move-extras + v0.2.8 Phase 2 web-assets Tier1 + v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH
+**Design spec:** `STAGING_SPEC.md` — `Move-StagedWorkbenchLaneToReview.ps1` v0.3.0 McNASBackup music human move-extras + v0.2.9 McNASBackup video move-extras + v0.2.8 Phase 2 web-assets Tier1 + v0.2.7 Phase 2 BMP medium-review + v0.2.6 PST human-review + v0.2.5 Suns/PNG + v0.2.4 CSV + v0.2.3 GIF; `Move-StagedDuplicatesToDeleteReview.ps1` v0.2.2 HIGH
 
-HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28), PST (66), Phase 2 BMP medium-review (1,619), Phase 2 web-assets Tier1 (16,708), Phase 2 McNASBackup video move-extras (650) Execute verified. Video HOLD: sample-first (294 groups), medium (4), low-risk (1). Human-review BMPs (4,406) HOLD under `I:\recover\BMPs`. Web-assets HOLD: PDFs, Office docs, shared-human hashes, Tier2 unclear, human escalations under `I:\recover\McNASBackup`. **04_DUPLICATES_STAGED:** 0 files (cleared). **06_HUMAN_REVIEW:** 716 files (650 video extras + 66 PST). **05_DELETE_REVIEW:** 19,738 files. MOVE-only; no hard delete, no copy, no keeper movement, no PST opened.
+HIGH (1,331), GIF (28), CSV (24), Suns/PNG (28), PST (66), Phase 2 BMP medium-review (1,619), Phase 2 web-assets Tier1 (16,708), Phase 2 McNASBackup video move-extras (650), Phase 2 McNASBackup music human move-extras (2,838) Execute verified. Video HOLD: sample-first (294 groups), medium (4), low-risk (1). Music HOLD: sample-first (2,420 groups), medium sample-first (2,788), medium move-extras-ready (9), low-risk (29). Human-review BMPs (4,406) HOLD under `I:\recover\BMPs`. Web-assets HOLD: PDFs, Office docs, shared-human hashes, Tier2 unclear, human escalations under `I:\recover\McNASBackup`. **04_DUPLICATES_STAGED:** 0 files (cleared). **06_HUMAN_REVIEW:** 3,554 files (2,838 music + 650 video extras + 66 PST). **05_DELETE_REVIEW:** 19,738 files. MOVE-only; no hard delete, no copy, no keeper movement, no PST opened.
 
 ## 3. Hash Scout built
 
