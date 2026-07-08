@@ -10,7 +10,7 @@ param(
     [string]$OutputStamp = '20260707'
 )
 
-# Phase 2 McNASBackup photo keeper-policy report v0.1.0 (read-only)
+# Phase 2 McNASBackup photo keeper-policy report v0.1.1 (read-only)
 # INVENTORY ANALYSIS ONLY — not a mover, not a move plan, not cleanup.
 # Reads photo inventory CSV, scores duplicate hash groups, recommends policy buckets.
 # CandidateKeeperPath stays in place. Only duplicate extras may ever be considered later.
@@ -67,6 +67,149 @@ function Get-SourceSubfolder([string]$fullPath, [string]$rootPath) {
     $parts = $rel -split '\\'
     if ($parts.Count -ge 2) { return ($parts[0..1] -join '\') }
     return $parts[0]
+}
+
+function Get-GroupPathBlob {
+    param(
+        [array]$Rows,
+        [string]$CandidateKeeperPath = '',
+        [string]$SamplePaths = ''
+    )
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($row in $Rows) {
+        if ($row.PSObject.Properties.Name -contains 'FullName' -and -not [string]::IsNullOrWhiteSpace($row.FullName)) {
+            [void]$parts.Add((Get-NormPath $row.FullName))
+        }
+        if ($row.PSObject.Properties.Name -contains 'RelativePath' -and -not [string]::IsNullOrWhiteSpace($row.RelativePath)) {
+            [void]$parts.Add($row.RelativePath)
+        }
+        if ($row.PSObject.Properties.Name -contains 'Directory' -and -not [string]::IsNullOrWhiteSpace($row.Directory)) {
+            [void]$parts.Add((Get-NormPath $row.Directory))
+        }
+        if ($row.PSObject.Properties.Name -contains 'FileName' -and -not [string]::IsNullOrWhiteSpace($row.FileName)) {
+            [void]$parts.Add($row.FileName)
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CandidateKeeperPath)) {
+        [void]$parts.Add((Get-NormPath $CandidateKeeperPath))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($SamplePaths)) {
+        foreach ($p in ($SamplePaths -split '\|')) {
+            $trimmed = $p.Trim()
+            if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                [void]$parts.Add((Get-NormPath $trimmed))
+            }
+        }
+    }
+    return ($parts -join ' ').ToLowerInvariant()
+}
+
+function Get-SafetyDemotion {
+    param(
+        [array]$Rows,
+        [string]$CandidateKeeperPath = '',
+        [string]$SamplePaths = ''
+    )
+
+    $blob = Get-GroupPathBlob -Rows $Rows -CandidateKeeperPath $CandidateKeeperPath -SamplePaths $SamplePaths
+
+    $holdChecks = @(
+        @{ Pattern = 'medical'; Term = 'medical' }
+        @{ Pattern = 'immuniz'; Term = 'immunization' }
+        @{ Pattern = 'doctor'; Term = 'doctor' }
+        @{ Pattern = 'hospital'; Term = 'hospital' }
+        @{ Pattern = 'safedeposit|safe_deposit|safedepositbox'; Term = 'safedeposit' }
+        @{ Pattern = '(\\|_|^)safe(\\|_|$)'; Term = 'safe' }
+        @{ Pattern = 'savings_bonds|us_savings_bonds'; Term = 'savings_bonds' }
+        @{ Pattern = '(\\|_|^)bonds(\\|_|$)'; Term = 'bonds' }
+        @{ Pattern = 'tax|taxes'; Term = 'tax' }
+        @{ Pattern = 'legal'; Term = 'legal' }
+        @{ Pattern = 'court'; Term = 'court' }
+        @{ Pattern = 'claim'; Term = 'claim' }
+        @{ Pattern = 'insurance'; Term = 'insurance' }
+        @{ Pattern = 'passport'; Term = 'passport' }
+        @{ Pattern = 'license'; Term = 'license' }
+        @{ Pattern = 'birth'; Term = 'birth' }
+        @{ Pattern = 'death'; Term = 'death' }
+        @{ Pattern = 'ssn|social_security'; Term = 'ssn' }
+        @{ Pattern = 'bank'; Term = 'bank' }
+        @{ Pattern = 'financial'; Term = 'financial' }
+    )
+    foreach ($check in $holdChecks) {
+        if ($blob -match $check.Pattern) {
+            return [pscustomobject]@{
+                Bucket = 'HOLD_UNTOUCHED'
+                Risk = 'HIGH'
+                MatchedTerm = $check.Term
+            }
+        }
+    }
+
+    $sampleChecks = @(
+        @{ Pattern = 'mcphotos'; Term = 'McPhotos' }
+        @{ Pattern = '\\pictures\\|my pictures'; Term = 'Pictures' }
+        @{ Pattern = 'pictureit'; Term = 'PictureIt' }
+        @{ Pattern = 'digital_camera'; Term = 'digital_camera' }
+        @{ Pattern = 'camera uploads|camera_uploads|camera roll'; Term = 'Camera Uploads' }
+        @{ Pattern = '\\dcim\\'; Term = 'DCIM' }
+        @{ Pattern = '(\\|_|^)camera(\\|_|$)'; Term = 'camera' }
+        @{ Pattern = '\\katie\\|(^|_)katie(_|$|\\)'; Term = 'Katie' }
+        @{ Pattern = '\\sam\\|(^|_)sam(_|$|\\)'; Term = 'Sam' }
+        @{ Pattern = '\\jake\\|(^|_)jake(_|$|\\)'; Term = 'Jake' }
+        @{ Pattern = '\\mom\\|(^|_)mom(_|$|\\)'; Term = 'Mom' }
+        @{ Pattern = '\\dad\\|(^|_)dad(_|$|\\)'; Term = 'Dad' }
+        @{ Pattern = 'family'; Term = 'family' }
+        @{ Pattern = 'calendar'; Term = 'calendar' }
+        @{ Pattern = 'abc_book'; Term = 'abc_book' }
+        @{ Pattern = 'tennis'; Term = 'tennis' }
+        @{ Pattern = '\\photos\\|(^|_)photos(_|$|\\)'; Term = 'photos' }
+        @{ Pattern = '(\\|_|^)photo(\\|_|$)'; Term = 'photo' }
+    )
+    foreach ($check in $sampleChecks) {
+        if ($blob -match $check.Pattern) {
+            return [pscustomobject]@{
+                Bucket = 'PHOTO_SAMPLE_FIRST'
+                Risk = 'MEDIUM'
+                MatchedTerm = $check.Term
+            }
+        }
+    }
+
+    return $null
+}
+
+function Apply-WebReadySafetyDemotion {
+    param(
+        [pscustomobject]$Policy,
+        [System.Collections.Generic.List[string]]$NoteParts,
+        [array]$Rows,
+        [string]$CandidateKeeperPath = '',
+        [string]$SamplePaths = ''
+    )
+    if ($Policy.Bucket -ne 'WEB_ASSET_DUPLICATES_READY') {
+        return [pscustomobject]@{ Policy = $Policy; Demoted = $false; MatchedTerm = '' }
+    }
+
+    $demotion = Get-SafetyDemotion -Rows $Rows -CandidateKeeperPath $CandidateKeeperPath -SamplePaths $SamplePaths
+    if ($null -eq $demotion) {
+        return [pscustomobject]@{ Policy = $Policy; Demoted = $false; MatchedTerm = '' }
+    }
+
+    $updated = [pscustomobject]@{
+        Bucket = $demotion.Bucket
+        Risk = $demotion.Risk
+        Notes = $Policy.Notes
+    }
+    [void]$NoteParts.Add('SafetyDemotedFromWebReady')
+    $tokenName = if ($demotion.Bucket -eq 'HOLD_UNTOUCHED') { 'SensitiveHoldToken' } else { 'PhotoSampleToken' }
+    [void]$NoteParts.Add("${tokenName}:$($demotion.MatchedTerm)")
+
+    return [pscustomobject]@{
+        Policy = $updated
+        Demoted = $true
+        MatchedTerm = $demotion.MatchedTerm
+        DemotedTo = $demotion.Bucket
+    }
 }
 
 function Get-WebAssetSignalScore {
@@ -306,6 +449,7 @@ $dupGroups = @($allGroups | Where-Object { $_.Count -ge 2 })
 Write-Host "Duplicate hash groups: $($dupGroups.Count)"
 
 $policyRows = New-Object System.Collections.ArrayList
+$demotedRows = New-Object System.Collections.ArrayList
 $gi = 0
 
 foreach ($g in $dupGroups) {
@@ -361,9 +505,24 @@ foreach ($g in $dupGroups) {
     $extensions = ($rows | ForEach-Object { $_.Extension.ToLowerInvariant() } | Sort-Object -Unique) -join '|'
     $samplePaths = ($scored | Select-Object -First 8 | ForEach-Object { $_.FullName }) -join ' | '
 
-    $noteParts = @($policy.Notes)
-    if ($allCarved) { $noteParts += 'AllCopiesCarvedOrGeneric' }
-    if ($ambiguous) { $noteParts += 'KeeperTieWithin15Points' }
+    $noteParts = New-Object System.Collections.Generic.List[string]
+    if ($policy.Notes) { [void]$noteParts.Add($policy.Notes) }
+    if ($allCarved) { [void]$noteParts.Add('AllCopiesCarvedOrGeneric') }
+    if ($ambiguous) { [void]$noteParts.Add('KeeperTieWithin15Points') }
+
+    $demotionResult = Apply-WebReadySafetyDemotion -Policy $policy -NoteParts $noteParts -Rows $rows `
+        -CandidateKeeperPath $keeperPath -SamplePaths $samplePaths
+    $policy = $demotionResult.Policy
+    if ($demotionResult.Demoted) {
+        [void]$demotedRows.Add([pscustomobject]@{
+            Hash = $hash
+            DemotedTo = $demotionResult.DemotedTo
+            MatchedTerm = $demotionResult.MatchedTerm
+            DuplicateExtraCount = $extrasCount
+            DuplicateExtraBytes = $extrasBytes
+            CandidateKeeperPath = $keeperPath
+        })
+    }
 
     [void]$policyRows.Add([pscustomobject]@{
         Hash = $hash
@@ -382,6 +541,12 @@ foreach ($g in $dupGroups) {
         Notes = ($noteParts | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique) -join ';'
     })
 }
+
+$demotedCount = $demotedRows.Count
+$demotedExtras = ($demotedRows | ForEach-Object { [int]$_.DuplicateExtraCount } | Measure-Object -Sum).Sum
+$demotedBytes = ($demotedRows | ForEach-Object { [int64]$_.DuplicateExtraBytes } | Measure-Object -Sum).Sum
+$demotedToHold = @($demotedRows | Where-Object DemotedTo -eq 'HOLD_UNTOUCHED').Count
+$demotedToSample = @($demotedRows | Where-Object DemotedTo -eq 'PHOTO_SAMPLE_FIRST').Count
 
 $policyRows | Export-Csv -LiteralPath $csvOut -NoTypeInformation -Encoding utf8
 
@@ -441,7 +606,14 @@ $lines = @(
     "UniqueInventoryFiles: $($allGroups.Count - $dupGroups.Count)"
     "TotalDuplicateExtraBytes: $(($policyRows | ForEach-Object { [int64]$_.DuplicateExtraBytes } | Measure-Object -Sum).Sum)"
     ''
-    '=== GROUP COUNTS BY POLICY BUCKET ==='
+    '=== WEB_READY SAFETY DEMOTIONS ==='
+    "DemotedFromWebReadyGroups: $demotedCount"
+    "DemotedDuplicateExtras: $demotedExtras"
+    "DemotedDuplicateExtraBytes: $demotedBytes"
+    "DemotedToHOLD_UNTOUCHED: $demotedToHold"
+    "DemotedToPHOTO_SAMPLE_FIRST: $demotedToSample"
+    ''
+    '=== FINAL GROUP COUNTS BY POLICY BUCKET ==='
 )
 $lines += $byBucket | ForEach-Object {
     "$($_.Bucket): groups=$($_.Groups) files=$($_.Files) extrasFiles=$($_.ExtrasFiles) extrasBytes=$($_.ExtrasBytes) groupBytes=$($_.GroupBytes)"
@@ -476,7 +648,13 @@ $photoSample | Sort-Object { [int64]$_.DuplicateExtraBytes } -Descending | Selec
     $lines += "  $($_.DuplicateExtraBytes)`t$($_.GroupFileCount)`t$($_.Notes)`t$($_.CandidateKeeperPath)"
 }
 $lines += ''
+$lines += '=== TOP SAFETY-DEMOTED GROUPS ==='
+$demotedRows | Sort-Object { [int64]$_.DuplicateExtraBytes } -Descending | Select-Object -First 15 | ForEach-Object {
+    $lines += "  $($_.DemotedTo)`t$($_.DuplicateExtraBytes)`t$($_.MatchedTerm)`t$($_.CandidateKeeperPath)"
+}
+$lines += ''
 $lines += '=== KEEPER POLICY CAUTIONS ==='
+$lines += '- WEB_ASSET_DUPLICATES_READY groups with sensitive/personal/photo-family path terms are demoted before final bucket assignment.'
 $lines += '- CandidateKeeperPath remains in place; only duplicate extras may ever be considered later.'
 $lines += '- GIF/PNG/BMP dominate this inventory; many groups are FrontPage/_vti_cnf/web-theme cruft.'
 $lines += '- McPhotos groups may still contain web GIF decor mixed with real photos; sample before move plan.'
