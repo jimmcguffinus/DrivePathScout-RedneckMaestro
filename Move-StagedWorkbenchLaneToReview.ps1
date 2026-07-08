@@ -23,13 +23,13 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$RunStamp,
 
-    [ValidateSet('GifMedium', 'CsvMedium', 'SunsPngMedium', 'PstHumanReview', 'Phase2BmpMediumReview', 'Phase2WebAssetsTier1', 'Phase2McNasBackupVideoExtrasHumanReview')]
+    [ValidateSet('GifMedium', 'CsvMedium', 'SunsPngMedium', 'PstHumanReview', 'Phase2BmpMediumReview', 'Phase2WebAssetsTier1', 'Phase2McNasBackupVideoExtrasHumanReview', 'Phase2McNasBackupMusicExtrasHumanReview')]
     [string]$LaneProfile = 'GifMedium',
 
     [switch]$Execute
 )
 
-# Workbench Lane Review Move Planner v0.2.9
+# Workbench Lane Review Move Planner v0.3.0
 # MOVE staged duplicate files from an approved workbench lane into review roots. Default is DryRun.
 # LaneProfile GifMedium:                           04_DUPLICATES_STAGED\...\images\gif -> 05_DELETE_REVIEW\medium_review\gif
 # LaneProfile CsvMedium:                            04_DUPLICATES_STAGED\...\data\csv   -> 05_DELETE_REVIEW\medium_review\csv
@@ -38,6 +38,7 @@ param(
 # LaneProfile Phase2BmpMediumReview:                I:\recover\BMPs (MEDIUM_REVIEW_IMAGES_BMP only) -> 05_DELETE_REVIEW\medium_review\images\bmp
 # LaneProfile Phase2WebAssetsTier1:                 I:\recover\McNASBackup (Tier1 KEEP web junk + tool archives) -> 05_DELETE_REVIEW\high_confidence_junk\phase2_web_assets\*
 # LaneProfile Phase2McNasBackupVideoExtrasHumanReview: I:\recover\McNASBackup (MOVE_EXTRAS_READY duplicate extras only) -> 06_HUMAN_REVIEW\media\videos\mcnasbackup_duplicate_extras
+# LaneProfile Phase2McNasBackupMusicExtrasHumanReview: I:\recover\McNASBackup (HUMAN_REVIEW_MOVE_EXTRAS_READY music extras only) -> 06_HUMAN_REVIEW\media\music\mcnasbackup_duplicate_extras
 # Full execute preflight eliminates predictable per-row blockers before the first Move-Item.
 # Not transactionally atomic after external I/O failure; manifest-based recovery may be required.
 # No Remove-Item. No Copy-Item. No Rename-Item. Never moves keeper files or I:\recover / I:\1tbrecover sources.
@@ -190,6 +191,34 @@ function Initialize-LaneProfile {
             $script:RequiredReviewConfidence = 'MEDIUM'
             $script:ReportNamePrefix = 'phase2_mcnasbackup_video_move_extras'
             $script:InventoryCouplingMode = 'Phase2McNasBackupVideoExtras'
+            $script:RequiresKeeperVerification = $true
+            $script:RequiresKeeperReviewCopy = $false
+            $script:RequiresFlatStagedRoot = $false
+            $script:PlanSourcePathColumn = 'SourcePath'
+            $script:PlanDestinationPathColumn = 'ReviewPath'
+            $script:UsesHumanReviewRoot = $true
+            $script:ForbiddenDestinationRoots = @('I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW')
+            $script:WorkbenchExcludeRoots = @(
+                'I:\_RECOVERY_WORKBENCH\02_KEEPERS_REVIEW',
+                'I:\_RECOVERY_WORKBENCH\04_DUPLICATES_STAGED',
+                'I:\_RECOVERY_WORKBENCH\05_DELETE_REVIEW',
+                'I:\_RECOVERY_WORKBENCH\06_HUMAN_REVIEW'
+            )
+        }
+        'Phase2McNasBackupMusicExtrasHumanReview' {
+            $script:UsesPhase2RecoverSource = $true
+            $script:Phase2RecoverSourceRoot = 'I:\recover\McNASBackup'
+            $script:StagedDuplicatesRoot = 'I:\recover\McNASBackup'
+            $script:ApprovedStagedSourceRoots = @('I:\recover\McNASBackup')
+            $script:ApprovedSourceSubfolders = @('media\music\mcnasbackup_duplicate_extras')
+            $script:ReviewLaneBySourceSubfolder = @{ 'media\music\mcnasbackup_duplicate_extras' = 'media\music\mcnasbackup_duplicate_extras' }
+            $script:AllowedFileExtensions = @('.mp3', '.m4a', '.wma', '.wav', '.flac', '.aac', '.ogg')
+            $script:RequiredFileExtension = '.mp3'
+            $script:DeniedSourceSubfolderPatterns = @()
+            $script:DeniedMoveSourcePrefixes = @()
+            $script:RequiredReviewConfidence = 'MEDIUM'
+            $script:ReportNamePrefix = 'phase2_mcnasbackup_music_human_move_extras'
+            $script:InventoryCouplingMode = 'Phase2McNasBackupMusicExtras'
             $script:RequiresKeeperVerification = $true
             $script:RequiresKeeperReviewCopy = $false
             $script:RequiresFlatStagedRoot = $false
@@ -595,7 +624,7 @@ function Read-ApprovedReviewMovePlan {
                     throw "Approved review move plan row has personal signal: $stagedPath"
                 }
             }
-            if ($script:InventoryCouplingMode -eq 'Phase2McNasBackupVideoExtras') {
+            if ($script:InventoryCouplingMode -in @('Phase2McNasBackupVideoExtras', 'Phase2McNasBackupMusicExtras')) {
                 if ($row.PSObject.Properties.Name -contains 'ProposedFutureLane' -and
                     $row.ProposedFutureLane.Trim() -ne 'HUMAN_REVIEW_MOVE_EXTRAS_READY') {
                     throw "Approved review move plan row is not HUMAN_REVIEW_MOVE_EXTRAS_READY: $stagedPath"
@@ -604,9 +633,10 @@ function Read-ApprovedReviewMovePlan {
                     throw "Approved review move plan row requires human spot check: $stagedPath"
                 }
                 if ($row.PSObject.Properties.Name -contains 'ProposedFutureLane') {
-                    $videoLane = $row.ProposedFutureLane.Trim()
-                    if ($videoLane -in @('HUMAN_REVIEW_SAMPLE_FIRST', 'MEDIUM_REVIEW_SAMPLE_FIRST', 'LOW_RISK_HOLD', 'BLOCKED_INVESTIGATE')) {
-                        throw "Approved review move plan row has excluded video lane '$videoLane': $stagedPath"
+                    $extrasLane = $row.ProposedFutureLane.Trim()
+                    $excludedLanes = @('HUMAN_REVIEW_SAMPLE_FIRST', 'MEDIUM_REVIEW_SAMPLE_FIRST', 'MEDIUM_REVIEW_MOVE_EXTRAS_READY', 'LOW_RISK_HOLD', 'BLOCKED_INVESTIGATE')
+                    if ($extrasLane -in $excludedLanes) {
+                        throw "Approved review move plan row has excluded extras lane '$extrasLane': $stagedPath"
                     }
                 }
             }
@@ -653,7 +683,7 @@ function Read-ApprovedReviewMovePlan {
         elseif ($row.PSObject.Properties.Name -contains 'CandidateKeeperPath') {
             $keeperPath = Get-NormalizedPath $row.CandidateKeeperPath
         }
-        if ($script:InventoryCouplingMode -eq 'Phase2McNasBackupVideoExtras') {
+        if ($script:InventoryCouplingMode -in @('Phase2McNasBackupVideoExtras', 'Phase2McNasBackupMusicExtras')) {
             if ([string]::IsNullOrWhiteSpace($keeperPath)) {
                 throw "Approved review move plan row missing CandidateKeeperPath: $stagedPath"
             }
@@ -799,6 +829,24 @@ function Get-InventoryIndex {
                     Hash                 = Get-NormalizedHash $row.Hash
                     SizeBytes            = $row.SizeBytes
                     DestinationSubfolder = 'media\videos\mcnasbackup_duplicate_extras'
+                    SuggestedPolicyLane  = $row.SuggestedPolicyLane.Trim()
+                    Extension            = $row.Extension.ToLowerInvariant()
+                    ReviewReason         = $row.ReviewReason.Trim()
+                }
+            }
+        }
+        elseif ($script:InventoryCouplingMode -eq 'Phase2McNasBackupMusicExtras') {
+            $key = (Get-NormalizedPath $row.FullName).ToUpperInvariant()
+            if ([string]::IsNullOrWhiteSpace($key)) { continue }
+            if ($index.ContainsKey($key)) {
+                [void]$duplicatePaths.Add($row.FullName)
+            }
+            else {
+                $index[$key] = [pscustomobject]@{
+                    FullName             = Get-NormalizedPath $row.FullName
+                    Hash                 = Get-NormalizedHash $row.Hash
+                    SizeBytes            = $row.SizeBytes
+                    DestinationSubfolder = 'media\music\mcnasbackup_duplicate_extras'
                     SuggestedPolicyLane  = $row.SuggestedPolicyLane.Trim()
                     Extension            = $row.Extension.ToLowerInvariant()
                     ReviewReason         = $row.ReviewReason.Trim()
@@ -963,6 +1011,33 @@ function Get-PlanInventoryCouplingIssues {
         }
         return @($issues)
     }
+    if ($script:InventoryCouplingMode -eq 'Phase2McNasBackupMusicExtras') {
+        if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
+            [void]$issues.Add('InventoryHashMismatch')
+        }
+        if ([int64]$InventoryRow.SizeBytes -ne [int64]$PlanRow.SizeBytes) {
+            [void]$issues.Add('InventorySizeMismatch')
+        }
+        if ($InventoryRow.SuggestedPolicyLane -in @('LOW_RISK_AUDIO_CACHE_OR_SAMPLE', 'BLOCKED_INVESTIGATE')) {
+            [void]$issues.Add('InventoryPolicyLaneMismatch')
+        }
+        if ($script:AllowedFileExtensions.Count -gt 0 -and
+            $script:AllowedFileExtensions -notcontains $InventoryRow.Extension.ToLowerInvariant()) {
+            [void]$issues.Add('InventoryExtensionRejected')
+        }
+        $planKeeper = ''
+        if ($PlanRow.PSObject.Properties.Name -contains 'KeeperPath' -and -not [string]::IsNullOrWhiteSpace($PlanRow.KeeperPath)) {
+            $planKeeper = Get-NormalizedPath $PlanRow.KeeperPath
+        }
+        elseif ($PlanRow.PSObject.Properties.Name -contains 'CandidateKeeperPath' -and -not [string]::IsNullOrWhiteSpace($PlanRow.CandidateKeeperPath)) {
+            $planKeeper = Get-NormalizedPath $PlanRow.CandidateKeeperPath
+        }
+        if (-not [string]::IsNullOrWhiteSpace($planKeeper) -and
+            $PlanRow.StagedDuplicatePath.Equals($planKeeper, [StringComparison]::OrdinalIgnoreCase)) {
+            [void]$issues.Add('SourceIsCandidateKeeper')
+        }
+        return @($issues)
+    }
     if ((Get-NormalizedHash $InventoryRow.Hash) -ne $PlanRow.Hash) {
         [void]$issues.Add('InventoryHashMismatch')
     }
@@ -1038,6 +1113,12 @@ function Test-InventoryRowEligible {
     if ($script:InventoryCouplingMode -eq 'Phase2McNasBackupVideoExtras') {
         return (
             $Row.SuggestedPolicyLane -in @('HUMAN_REVIEW_VIDEO_DUPLICATE', 'MEDIUM_REVIEW_VIDEO_DUPLICATE') -and
+            ($script:AllowedFileExtensions.Count -eq 0 -or $script:AllowedFileExtensions -contains $Row.Extension.ToLowerInvariant())
+        )
+    }
+    if ($script:InventoryCouplingMode -eq 'Phase2McNasBackupMusicExtras') {
+        return (
+            $Row.SuggestedPolicyLane -in @('HUMAN_REVIEW_MUSIC_DUPLICATE', 'MEDIUM_REVIEW_AUDIO_DUPLICATE') -and
             ($script:AllowedFileExtensions.Count -eq 0 -or $script:AllowedFileExtensions -contains $Row.Extension.ToLowerInvariant())
         )
     }
@@ -1434,7 +1515,7 @@ $inventoryData = Get-InventoryIndex -Path $InventoryCsvPath
 $planReadResult = Read-ApprovedReviewMovePlan -PlanPath $ApprovedReviewMovePlan -DeleteReviewRoot $deleteReviewRootNormalized
 $planEntries = $planReadResult.Entries
 
-Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.2.9 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
+Write-LogLine -Path $logReport -Message "START Move-StagedWorkbenchLaneToReview v0.3.0 LaneProfile=$LaneProfile mode=$runMode stamp=$RunStamp"
 Write-LogLine -Path $logReport -Message "InventoryCsvPath=$InventoryCsvPath"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan=$ApprovedReviewMovePlan"
 Write-LogLine -Path $logReport -Message "ApprovedReviewMovePlan_FileSha256=$planFileHash"
